@@ -1,0 +1,13 @@
+# Keep the upstream Yazi source checkout local; the public packaging project
+# contains only docs, packaging code and selected dist artifacts.
+/yazi/
+/packaging/source-runtime/
+/dist/yazi-intranet-*
+/dist/official/*.tar.gz
+/dist/official/*.zip
+
+# Local build/test output.
+__pycache__/
+*.py[cod]
+.DS_Store
+.vscode/

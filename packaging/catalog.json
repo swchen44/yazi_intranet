@@ -1,0 +1,495 @@
+{
+  "catalog_version": 1,
+  "yazi_version": "v26.9.1",
+  "helper_matrix": {
+    "file": {
+      "optional": false,
+      "role": "required",
+      "capability": "Detect MIME/type and provide Yazi's file-type fallback.",
+      "overlap": "No equivalent optional helper; Yazi requires file(1).",
+      "dependencies": {
+        "linux": ["package-local libmagic and magic.mgc", "host glibc baseline"],
+        "windows": ["package-local PortableGit file.exe DLLs and magic.mgc"]
+      },
+      "linux": {
+        "bundle_status": "host-vendor",
+        "runtime_test": "passed",
+        "test_command": "file --version; file fixture.json"
+      },
+      "windows": {
+        "bundle_status": "included",
+        "runtime_test": "pending",
+        "test_command": "file.exe --version; file.exe fixture.json"
+      }
+    },
+    "7zz": {
+      "optional": true,
+      "role": "archive-preview",
+      "capability": "List and extract 7z/zip/tar and other archive formats used by Yazi preview/actions.",
+      "overlap": "Not replaced by fd, rg or fzf; those search/select files but do not inspect archives.",
+      "dependencies": {
+        "linux": ["package-local 7zz"],
+        "windows": ["package-local 7zz.exe, 7za.dll and 7zxa.dll"]
+      },
+      "linux": {
+        "bundle_status": "included",
+        "runtime_test": "passed",
+        "test_command": "7zz i"
+      },
+      "windows": {
+        "bundle_status": "included",
+        "runtime_test": "pending",
+        "test_command": "7zz.exe i"
+      }
+    },
+    "ffmpeg": {
+      "optional": true,
+      "role": "video-preview",
+      "capability": "Create video thumbnails and inspect video metadata; ffprobe is delivered from the same build.",
+      "overlap": "Not replaced by ImageMagick; ImageMagick handles images/fonts, while FFmpeg handles video containers/codecs.",
+      "dependencies": {
+        "linux": ["package-local ffmpeg and ffprobe", "terminal graphics protocol for visible thumbnails"],
+        "windows": ["package-local ffmpeg.exe and ffprobe.exe", "terminal graphics protocol for visible thumbnails"]
+      },
+      "linux": {
+        "bundle_status": "included",
+        "runtime_test": "passed",
+        "test_command": "ffmpeg -version; ffprobe -version"
+      },
+      "windows": {
+        "bundle_status": "included",
+        "runtime_test": "pending",
+        "test_command": "ffmpeg.exe -version; ffprobe.exe -version"
+      }
+    },
+    "jq": {
+      "optional": true,
+      "role": "json-preview",
+      "capability": "Pretty-print JSON preview and transformations.",
+      "overlap": "Yazi has an internal JSON/code fallback, so jq improves the preview but is not a startup requirement.",
+      "dependencies": {
+        "linux": ["package-local jq"],
+        "windows": ["package-local jq.exe"]
+      },
+      "linux": {"bundle_status": "included", "runtime_test": "passed", "test_command": "jq . fixture.json"},
+      "windows": {"bundle_status": "included", "runtime_test": "pending", "test_command": "jq.exe . fixture.json"}
+    },
+    "pdftoppm": {
+      "optional": true,
+      "role": "pdf-preview",
+      "component": "Poppler",
+      "capability": "Render PDF pages into images for Yazi PDF preview; this bundle currently exposes pdftoppm, not every Poppler utility.",
+      "overlap": "ImageMagick can sometimes rasterize PDFs, but it is not a drop-in replacement for the Poppler path Yazi documents.",
+      "dependencies": {
+        "linux": ["audited Poppler/pdftoppm build still required", "terminal graphics protocol for visible pages"],
+        "windows": ["package-local Poppler DLLs and pdftoppm.exe", "terminal graphics protocol for visible pages"]
+      },
+      "linux": {"bundle_status": "pending", "runtime_test": "pending", "test_command": "pdftoppm -h"},
+      "windows": {"bundle_status": "included", "runtime_test": "pending", "test_command": "pdftoppm.exe -h"}
+    },
+    "resvg": {
+      "optional": true,
+      "role": "svg-preview",
+      "capability": "Render SVG previews.",
+      "overlap": "ImageMagick can convert some SVG files, but resvg is the focused SVG renderer used by Yazi's documented optional path.",
+      "dependencies": {
+        "linux": ["package-local resvg"],
+        "windows": ["No upstream Windows CLI asset in the pinned release"]
+      },
+      "linux": {"bundle_status": "included", "runtime_test": "passed", "test_command": "resvg --version"},
+      "windows": {"bundle_status": "unavailable", "runtime_test": "not-applicable", "test_command": "Not available from upstream release"}
+    },
+    "chafa": {
+      "optional": true,
+      "role": "ascii-image-fallback",
+      "capability": "Render images as Unicode/ASCII blocks when the terminal graphics protocol cannot display inline images.",
+      "overlap": "It is a fallback for terminal display, not a replacement for ffmpeg, pdftoppm or resvg. It can be unnecessary when native Sixel/Kitty graphics works.",
+      "dependencies": {
+        "linux": ["official statically linked GNU/Linux binary; glibc >= 2.17 baseline per upstream", "no Sixel/Kitty protocol required for ASCII output"],
+        "windows": ["official Windows x86_64 standalone binary", "Windows 10 or later per upstream"]
+      },
+      "linux": {"bundle_status": "included", "runtime_test": "passed", "test_command": "chafa --version; chafa fixture.png"},
+      "windows": {"bundle_status": "included", "runtime_test": "pending", "test_command": "chafa.exe --version; chafa.exe fixture.png"}
+    },
+    "rg": {
+      "optional": true,
+      "role": "content-search",
+      "capability": "Search file contents from Yazi workflows.",
+      "overlap": "fd searches names; rg searches contents. They complement each other rather than substitute each other.",
+      "dependencies": {"linux": ["package-local rg"], "windows": ["package-local rg.exe"]},
+      "linux": {"bundle_status": "included", "runtime_test": "passed", "test_command": "rg --version"},
+      "windows": {"bundle_status": "included", "runtime_test": "pending", "test_command": "rg.exe --version"}
+    },
+    "fd": {
+      "optional": true,
+      "role": "file-search",
+      "capability": "Fast filename/path search.",
+      "overlap": "rg searches contents; fd searches paths. Both are useful together, but neither requires the other.",
+      "dependencies": {"linux": ["package-local fd"], "windows": ["package-local fd.exe"]},
+      "linux": {"bundle_status": "included", "runtime_test": "passed", "test_command": "fd --version"},
+      "windows": {"bundle_status": "included", "runtime_test": "pending", "test_command": "fd.exe --version"}
+    },
+    "fzf": {
+      "optional": true,
+      "role": "interactive-selection",
+      "capability": "Interactive filtering/selection for file navigation workflows.",
+      "overlap": "Not a replacement for fd or rg; it is the interactive selector often used with their output.",
+      "dependencies": {"linux": ["package-local fzf"], "windows": ["package-local fzf.exe"]},
+      "linux": {"bundle_status": "included", "runtime_test": "passed", "test_command": "fzf --version"},
+      "windows": {"bundle_status": "included", "runtime_test": "pending", "test_command": "fzf.exe --version"}
+    },
+    "zoxide": {
+      "optional": true,
+      "role": "directory-navigation",
+      "capability": "Jump to historical/frequently used directories from shell/Yazi workflows.",
+      "overlap": "Not required for Yazi browsing; documented Yazi integration requires fzf as well.",
+      "dependencies": {"linux": ["package-local zoxide", "fzf for the documented Yazi integration"], "windows": ["package-local zoxide.exe", "fzf.exe for the documented Yazi integration"]},
+      "linux": {"bundle_status": "included", "runtime_test": "passed", "test_command": "zoxide --version"},
+      "windows": {"bundle_status": "included", "runtime_test": "pending", "test_command": "zoxide.exe --version"}
+    },
+    "magick": {
+      "optional": true,
+      "role": "image-format-preview",
+      "capability": "Font, HEIC and JPEG XL/image conversion support.",
+      "overlap": "Some image conversion overlaps with resvg/chafa, but ImageMagick covers broader formats and is not a video/PDF preview substitute.",
+      "dependencies": {
+        "linux": ["official AppImage currently fails on surfer because libharfbuzz.so.0 is absent; not bundled"],
+        "windows": ["package-local ImageMagick portable Q8 runtime"]
+      },
+      "linux": {"bundle_status": "pending", "runtime_test": "pending", "test_command": "magick -version"},
+      "windows": {"bundle_status": "included", "runtime_test": "pending", "test_command": "magick.exe -version"}
+    },
+    "glow": {
+      "optional": true,
+      "role": "markdown-viewer",
+      "capability": "Render Markdown as formatted terminal output; it is an extra user tool, not a Yazi startup dependency.",
+      "overlap": "bat also displays Markdown, but bat emphasizes source/syntax highlighting while glow renders the document.",
+      "dependencies": {"linux": ["package-local glow"], "windows": ["package-local glow.exe"]},
+      "linux": {"bundle_status": "included", "runtime_test": "passed", "test_command": "glow --version"},
+      "windows": {"bundle_status": "included", "runtime_test": "pending", "test_command": "glow.exe --version"}
+    },
+    "bat": {
+      "optional": true,
+      "role": "syntax-viewer",
+      "capability": "Syntax-highlighted text/Markdown viewer; it is an extra user tool, not a Yazi startup dependency.",
+      "overlap": "glow renders Markdown; bat shows source with syntax highlighting. They are complementary rather than identical.",
+      "dependencies": {"linux": ["package-local bat musl binary"], "windows": ["package-local bat.exe", "Windows VC runtime must be verified on acceptance host"]},
+      "linux": {"bundle_status": "included", "runtime_test": "passed", "test_command": "bat --version; bat --paging=never README.md"},
+      "windows": {"bundle_status": "included", "runtime_test": "pending", "test_command": "bat.exe --version; bat.exe --paging=never README.md"}
+    }
+  },
+  "targets": {
+    "linux-x86_64": {
+      "package_target": "x86_64-unknown-linux-musl",
+      "archive_suffix": ".tar.gz",
+      "yazi": {
+        "source_kind": "github_release",
+        "repo": "sxyazi/yazi",
+        "tag": "v26.9.1",
+        "asset": "yazi-x86_64-unknown-linux-musl.zip",
+        "sha256": "9b9c39decccf8cb0ff53a7d637d38f8a79d93bbd0099f4ea9c619ef6bb392f5d"
+      },
+      "helpers": [
+        {
+          "name": "glow",
+          "source_kind": "github_release",
+          "repo": "charmbracelet/glow",
+          "tag": "v3.0.0",
+          "asset": "glow_3.0.0_Linux_x86_64.tar.gz",
+          "sha256": "13e05e4b2acc18d2aee44291aefe6325b077ec321b631a0cfa780e8e3bc33f78",
+          "extract": [{"match": "*/glow", "destination": "bin/glow"}]
+        },
+        {
+          "name": "bat",
+          "source_kind": "github_release",
+          "repo": "sharkdp/bat",
+          "tag": "v0.26.1",
+          "asset": "bat-v0.26.1-x86_64-unknown-linux-musl.tar.gz",
+          "sha256": "0dcd8ac79732c0d5b136f11f4ee00e581440e16a44eab5b3105b611bbf2cf191",
+          "extract": [{"match": "*/bat", "destination": "bin/bat"}]
+        },
+        {
+          "name": "7zz",
+          "source_kind": "direct",
+          "version": "26.03",
+          "url": "https://www.7-zip.org/a/7z2603-linux-x64.tar.xz",
+          "sha256": "dc99eff5008f1ab79bd7084c68513701547a808a89502bf4133683535ab3c695",
+          "extractor": "tar",
+          "extract": [{"match": "7zz", "destination": "bin/7zz"}],
+          "license_url": "https://www.7-zip.org/license.txt"
+        },
+        {
+          "name": "jq",
+          "source_kind": "direct",
+          "version": "1.8.2",
+          "url": "https://github.com/jqlang/jq/releases/download/jq-1.8.2/jq-linux-amd64",
+          "sha256": "b1c22172dd303f3be49e935aa56aa48a8b7a46e0bc838b4997d3bb451495870f",
+          "extractor": "raw",
+          "extract": [{"match": "*", "destination": "bin/jq"}],
+          "license_url": "https://github.com/jqlang/jq/blob/master/COPYING"
+        },
+        {
+          "name": "resvg",
+          "source_kind": "github_release",
+          "repo": "linebender/resvg",
+          "tag": "v0.48.1",
+          "asset": "resvg-linux-x86_64.tar.gz",
+          "sha256": "fa8c26495a187e592c501db15bf9e8a9fdc051d4b2b336b39703d5b59f912b9d",
+          "extract": [{"match": "*/resvg", "destination": "bin/resvg"}]
+        },
+        {
+          "name": "rg",
+          "source_kind": "github_release",
+          "repo": "BurntSushi/ripgrep",
+          "tag": "15.2.0",
+          "asset": "ripgrep-15.2.0-x86_64-unknown-linux-musl.tar.gz",
+          "sha256": "33e15bcf1624b25cdd2a55813a47a2f95dbe126268203e76aa6a585d1e7b149c",
+          "extract": [{"match": "*/rg", "destination": "bin/rg"}]
+        },
+        {
+          "name": "fd",
+          "source_kind": "github_release",
+          "repo": "sharkdp/fd",
+          "tag": "v10.5.0",
+          "asset": "fd-v10.5.0-x86_64-unknown-linux-musl.tar.gz",
+          "sha256": "761c72dc8e120d85b22292063be8a796e2eeb20eb3e4f38b8fa2343ccf3514a7",
+          "extract": [{"match": "*/fd", "destination": "bin/fd"}]
+        },
+        {
+          "name": "fzf",
+          "source_kind": "github_release",
+          "repo": "junegunn/fzf",
+          "tag": "v0.74.4",
+          "asset": "fzf-0.74.4-linux_amd64.tar.gz",
+          "sha256": "05e6813a337cc722c3ed07e54a764b75cc5d671e2e60459db0ba696ee5fa7504",
+          "extract": [{"match": "fzf", "destination": "bin/fzf"}]
+        },
+        {
+          "name": "zoxide",
+          "source_kind": "github_release",
+          "repo": "ajeetdsouza/zoxide",
+          "tag": "v0.10.0",
+          "asset": "zoxide-0.10.0-x86_64-unknown-linux-musl.tar.gz",
+          "sha256": "2d93385b99f3e82cf2701609a1bffcad863fbeb75aa3fe7eb6be4d29be68b1ae",
+          "extract": [{"match": "*/zoxide", "destination": "bin/zoxide"}]
+        },
+        {
+          "name": "file",
+          "status": "host-vendor",
+          "source_kind": "host_vendor",
+          "reason": "Linux file(1) must be collected on a Linux build host with its magic database and audited non-baseline libraries."
+        },
+        {
+          "name": "ffmpeg",
+          "source_kind": "third_party_direct",
+          "provider": "BtbN/FFmpeg-Builds",
+          "version": "n8.1 LGPL build",
+          "url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n8.1-latest-linux64-lgpl-8.1.tar.xz",
+          "sha256": "d06a217cd7051ba4aa748f5bd156d5edf96e4b3b9cbc27e2df7191f54606f5ed",
+          "extractor": "tar",
+          "extract": [
+            {"match": "*/bin/ffmpeg", "destination": "bin/ffmpeg"},
+            {"match": "*/bin/ffprobe", "destination": "bin/ffprobe"}
+          ],
+          "license_url": "https://ffmpeg.org/legal.html"
+        },
+        {
+          "name": "magick",
+          "status": "pending",
+          "source_kind": "direct",
+          "provider": "ImageMagick",
+          "version": "7.1.2-31",
+          "url": "https://github.com/ImageMagick/ImageMagick/releases/download/7.1.2-31/ImageMagick-7.1.2-31-gcc-x86_64.AppImage",
+          "sha256": "b22dee096a68e7eb6771a6f98c16490ea78d399ffa27f34ca2ec4f02e707fd9c",
+          "extractor": "raw",
+          "extract": [{"match": "*", "destination": "runtime/imagemagick/ImageMagick.AppImage"}],
+          "wrapper": "appimage",
+          "reason": "The official Linux AppImage still resolves libharfbuzz and other host libraries on the minimal surfer Ubuntu baseline; it is not self-contained enough for this portable package yet.",
+          "license_url": "https://github.com/ImageMagick/ImageMagick/blob/main/LICENSE"
+        },
+        {
+          "name": "pdftoppm",
+          "status": "pending",
+          "source_kind": "host_vendor",
+          "reason": "Poppler official release is source-oriented; Linux portable binary requires a separately audited Ubuntu/Poppler build."
+        },
+        {
+          "name": "chafa",
+          "source_kind": "direct",
+          "provider": "Chafa upstream",
+          "version": "1.18.2",
+          "url": "https://hpjansson.org/chafa/releases/static/chafa-1.18.2-1-x86_64-linux-gnu.tar.gz",
+          "sha256": "deb149bc8823589f635f24db3ecc83b7daa86e4c20d8a9f58e9ce53bd97bdda9",
+          "extractor": "tar",
+          "extract": [{"match": "*/chafa", "destination": "bin/chafa"}],
+          "license_url": "https://github.com/hpjansson/chafa/blob/master/COPYING"
+        }
+      ]
+    },
+    "windows-x86_64": {
+      "package_target": "x86_64-pc-windows-msvc",
+      "archive_suffix": ".zip",
+      "yazi": {
+        "source_kind": "github_release",
+        "repo": "sxyazi/yazi",
+        "tag": "v26.9.1",
+        "asset": "yazi-x86_64-pc-windows-msvc.zip",
+        "sha256": "7c033e5f2de6355fd03d865319053fc97db780275974ed17653c057f5d0f8d21"
+      },
+      "helpers": [
+        {
+          "name": "glow",
+          "source_kind": "github_release",
+          "repo": "charmbracelet/glow",
+          "tag": "v3.0.0",
+          "asset": "glow_3.0.0_Windows_x86_64.zip",
+          "sha256": "d8907e07436ecbb6738bc0e3bbf8aa6159e351f95082e9db3c3fc4200086f809",
+          "extract": [{"match": "*/glow.exe", "destination": "bin/glow.exe"}]
+        },
+        {
+          "name": "bat",
+          "source_kind": "github_release",
+          "repo": "sharkdp/bat",
+          "tag": "v0.26.1",
+          "asset": "bat-v0.26.1-x86_64-pc-windows-msvc.zip",
+          "sha256": "0f729b4b6f5f28d395c641eacc2e9ff68d0096b85aa0eec344aa62425144b69b",
+          "extract": [{"match": "*/bat.exe", "destination": "bin/bat.exe"}],
+          "runtime_note": "Validate MSVC runtime on the Windows acceptance host."
+        },
+        {
+          "name": "7zz",
+          "source_kind": "direct",
+          "version": "26.03",
+          "url": "https://www.7-zip.org/a/7z2603-extra.7z",
+          "sha256": "191894e6acb3647ffb69ce630479ff318523b2e2b9890aa7f05c1127c2e59b8f",
+          "extractor": "7zz",
+          "extract": [
+            {"match": "x64/7za.exe", "destination": "bin/7zz.exe"},
+            {"match": "x64/7za.dll", "destination": "bin/7za.dll"},
+            {"match": "x64/7zxa.dll", "destination": "bin/7zxa.dll"}
+          ],
+          "license_url": "https://www.7-zip.org/license.txt"
+        },
+        {
+          "name": "jq",
+          "source_kind": "direct",
+          "version": "1.8.2",
+          "url": "https://github.com/jqlang/jq/releases/download/jq-1.8.2/jq-windows-amd64.exe",
+          "sha256": "a6fc67fedaf9128a3309a1e2ebb8b986aeccf70122ee46d2cb4849e423f0c627",
+          "extractor": "raw",
+          "extract": [{"match": "*", "destination": "bin/jq.exe"}],
+          "license_url": "https://github.com/jqlang/jq/blob/master/COPYING"
+        },
+        {
+          "name": "rg",
+          "source_kind": "github_release",
+          "repo": "BurntSushi/ripgrep",
+          "tag": "15.2.0",
+          "asset": "ripgrep-15.2.0-x86_64-pc-windows-msvc.zip",
+          "sha256": "71b2fef860abe467217a538ff31de02f5258807c0129f771846f87bd029aafc5",
+          "extract": [{"match": "*/rg.exe", "destination": "bin/rg.exe"}]
+        },
+        {
+          "name": "fd",
+          "source_kind": "github_release",
+          "repo": "sharkdp/fd",
+          "tag": "v10.5.0",
+          "asset": "fd-v10.5.0-x86_64-pc-windows-msvc.zip",
+          "sha256": "a227701b8551c35a9931d9f6da75503cf86d88e182d71fb849a70864c5d57cd7",
+          "extract": [{"match": "*/fd.exe", "destination": "bin/fd.exe"}]
+        },
+        {
+          "name": "fzf",
+          "source_kind": "github_release",
+          "repo": "junegunn/fzf",
+          "tag": "v0.74.4",
+          "asset": "fzf-0.74.4-windows_amd64.zip",
+          "sha256": "5e63c0e798406fcb9c51a9fed4988398e25fdabf8c670e32c16caf7b4a7ed02d",
+          "extract": [{"match": "fzf.exe", "destination": "bin/fzf.exe"}]
+        },
+        {
+          "name": "zoxide",
+          "source_kind": "github_release",
+          "repo": "ajeetdsouza/zoxide",
+          "tag": "v0.10.0",
+          "asset": "zoxide-0.10.0-x86_64-pc-windows-msvc.zip",
+          "sha256": "f465ae548f8754c8e7edbc60b45fbf58c92bfe123db83d790252d6810fa5daf1",
+          "extract": [{"match": "*/zoxide.exe", "destination": "bin/zoxide.exe"}]
+        },
+        {
+          "name": "ffmpeg",
+          "source_kind": "third_party_direct",
+          "provider": "BtbN/FFmpeg-Builds",
+          "version": "n8.1 LGPL build",
+          "url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n8.1-latest-win64-lgpl-8.1.zip",
+          "sha256": "40c6ca286f01fc777130522c16f7325f2dd7f2517f9410fbab61cd34ed97ef2c",
+          "extractor": "zip",
+          "extract": [
+            {"match": "*/bin/ffmpeg.exe", "destination": "bin/ffmpeg.exe"},
+            {"match": "*/bin/ffprobe.exe", "destination": "bin/ffprobe.exe"}
+          ],
+          "license_url": "https://ffmpeg.org/legal.html"
+        },
+        {
+          "name": "pdftoppm",
+          "source_kind": "third_party_direct",
+          "provider": "oschwartz10612/poppler-windows",
+          "version": "v26.09.0-0",
+          "url": "https://github.com/oschwartz10612/poppler-windows/releases/download/v26.09.0-0/Release-26.09.0-0.zip",
+          "sha256": "7a6f256a0ddf7536182246a5733331bf4677cbcc34f4663774947ad34556c8d0",
+          "extractor": "zip",
+          "extract": [
+            {"match": "*/bin/pdftoppm.exe", "destination": "bin/pdftoppm.exe"},
+            {"match": "*/bin/*.dll", "destination_dir": "bin"},
+            {"match": "*/share/*", "destination_dir": "runtime/poppler/share"}
+          ],
+          "license_url": "https://poppler.freedesktop.org/COPYING"
+        },
+        {
+          "name": "resvg",
+          "status": "unavailable",
+          "source_kind": "upstream_no_binary",
+          "reason": "resvg v0.48.1 publishes Linux x86_64 CLI but no Windows x86_64 CLI asset."
+        },
+        {
+          "name": "chafa",
+          "source_kind": "direct",
+          "provider": "Chafa upstream",
+          "version": "1.18.2",
+          "url": "https://hpjansson.org/chafa/releases/static/chafa-1.18.2-1-x86_64-windows.zip",
+          "sha256": "dcd3245c31851eef11eb077fefc12c6c76f3b0616754f0275fa8c3cb1e694165",
+          "extractor": "zip",
+          "extract": [{"match": "*/Chafa.exe", "destination": "bin/chafa.exe"}],
+          "license_url": "https://github.com/hpjansson/chafa/blob/master/COPYING"
+        },
+        {
+          "name": "magick",
+          "source_kind": "direct",
+          "provider": "ImageMagick",
+          "version": "7.1.2-31 Q8 portable",
+          "url": "https://github.com/ImageMagick/ImageMagick/releases/download/7.1.2-31/ImageMagick-7.1.2-31-portable-Q8-x64.7z",
+          "sha256": "4eb7914050902c52bf388bae188fdbdb04154ca89d105b2f6200a29cb774241b",
+          "extractor": "7zz",
+          "extract_all_to": "runtime/imagemagick",
+          "license_url": "https://github.com/ImageMagick/ImageMagick/blob/main/LICENSE"
+        },
+        {
+          "name": "file",
+          "source_kind": "github_release",
+          "repo": "git-for-windows/git",
+          "tag": "v2.55.0.windows.5",
+          "asset": "PortableGit-2.55.0.5-64-bit.7z.exe",
+          "sha256": "5aa8a20f6e9abb2c755f0e73c91c687701a46b309ad84a0ca6509380fa4ae290",
+          "extractor": "7zz",
+          "extract": [
+            {"match": "*/usr/bin/file.exe", "destination": "runtime/bin/file.exe"},
+            {"match": "*/usr/share/misc/magic.mgc", "destination": "runtime/share/misc/magic.mgc"},
+            {"match": "*/usr/bin/*.dll", "destination_dir": "runtime/bin"},
+            {"match": "*/usr/share/licenses/file/*", "destination_dir": "licenses/file"}
+          ],
+          "license_url": "https://github.com/git-for-windows/git/blob/main/Documentation/COPYING"
+        }
+      ]
+    }
+  }
+}

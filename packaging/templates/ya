@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SELF_DIR="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(CDPATH= cd -- "$SELF_DIR/.." && pwd)"
+
+export PATH="$ROOT_DIR/runtime/bin:$ROOT_DIR/bin${PATH:+:$PATH}"
+
+exec "$ROOT_DIR/bin/ya.real" "$@"
