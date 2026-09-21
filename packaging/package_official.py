@@ -336,6 +336,7 @@ def write_linux_launchers(stage: Path) -> None:
             "set -eu\n"
             'ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)\n'
             'export PATH="$ROOT/bin:$ROOT/runtime/bin:$ROOT/runtime/imagemagick${PATH:+:$PATH}"\n'
+            'export YAZI_CONFIG_HOME="${YAZI_CONFIG_HOME:-$ROOT/config}"\n'
             'export YAZI_FILE_ONE="${YAZI_FILE_ONE:-$ROOT/runtime/bin/file}"\n'
             'export MAGIC="${MAGIC:-$ROOT/runtime/share/misc/magic.mgc}"\n'
             'if [ -d "$ROOT/runtime/lib" ]; then\n'
@@ -355,11 +356,98 @@ def write_windows_launchers(stage: Path) -> None:
             "setlocal\r\n"
             "set \"ROOT=%~dp0..\"\r\n"
             "set \"PATH=%ROOT%\\bin;%ROOT%\\runtime\\bin;%ROOT%\\runtime\\imagemagick;%PATH%\"\r\n"
+            "if not defined YAZI_CONFIG_HOME set \"YAZI_CONFIG_HOME=%ROOT%\\config\"\r\n"
             "set \"YAZI_FILE_ONE=%ROOT%\\runtime\\bin\\file.exe\"\r\n"
             "set \"MAGIC=%ROOT%\\runtime\\share\\misc\\magic.mgc\"\r\n"
             f'"%ROOT%\\bin\\{real}" %*\r\n',
             encoding="utf-8",
         )
+
+
+def write_package_config(stage: Path, *, windows: bool, helpers: set[str]) -> list[str]:
+    config_dir = stage / "config"
+    config_dir.mkdir(parents=True, exist_ok=True)
+    command_suffix = ".exe" if windows else ""
+    platform = "Windows" if windows else "Linux/macOS"
+    lines = [
+        "# Package-local Yazi configuration.",
+        "# The package launcher sets YAZI_CONFIG_HOME to this directory by default.",
+        "# Set YAZI_CONFIG_HOME yourself to use another configuration directory.",
+        "",
+        "[preview]",
+        'wrap = "yes"',
+        "tab_size = 2",
+    ]
+    openers: list[str] = []
+    if "bat" in helpers:
+        openers.append("md-bat")
+    if "glow" in helpers:
+        openers.append("md-glow")
+    if openers:
+        lines.extend(["", "[opener]"])
+        if "md-bat" in openers:
+            lines.append(
+                "md-bat = ["
+            )
+            lines.append(
+                f'  {{ run = "bat{command_suffix} --paging=never --style=plain --color=always %s", '
+                f'block = true, for = "{"windows" if windows else "unix"}", desc = "View Markdown with bat" }},'
+            )
+            lines.append(
+                "]"
+            )
+        if "md-glow" in openers:
+            lines.append("md-glow = [")
+            lines.append(
+                f'  {{ run = "glow{command_suffix} %s", block = true, '
+                f'for = "{"windows" if windows else "unix"}", desc = "Render Markdown with glow" }},'
+            )
+            lines.append("]")
+        lines.extend(
+            [
+                "",
+                "[[open.prepend_rules]]",
+                'url = "*.{md,markdown,mdown,mkdn}"',
+                f'use = [ "edit", {", ".join(f"\"{name}\"" for name in openers)} ]',
+            ]
+        )
+    else:
+        lines.extend(
+            [
+                "",
+                "# bat/glow are not included in this profile, so no external Markdown opener is added.",
+            ]
+        )
+    lines.extend(
+        [
+            "",
+            f"# Target-specific launcher environment: {platform}.",
+            "",
+        ]
+    )
+    config_path = config_dir / "yazi.toml"
+    config_path.write_text("\n".join(lines), encoding="utf-8")
+    readme_path = config_dir / "README.md"
+    readme_path.write_text(
+        "\n".join(
+            [
+                "# Package-local Yazi configuration",
+                "",
+                "The package launcher sets `YAZI_CONFIG_HOME` to this directory unless the "
+                "user already set that environment variable.",
+                "",
+                "`yazi.toml` keeps Yazi's built-in code previewer. When the matching helper "
+                "is included, Markdown files expose `bat` and/or `glow` through Yazi's "
+                "Open with action; the first `edit` opener remains the normal default.",
+                "",
+                "The config contains no credentials, company paths, editor choice, shell "
+                "choice, or terminal-specific image protocol settings.",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    return ["config/yazi.toml", "config/README.md"]
 
 
 def write_magick_linux_wrapper(stage: Path) -> None:
@@ -463,6 +551,13 @@ def package_target(
             if (stage / "runtime" / "imagemagick" / "ImageMagick.AppImage").exists():
                 write_magick_linux_wrapper(stage)
 
+        included_helpers = {
+            name
+            for name, entry in helper_inventory.items()
+            if entry.get("status") == "included"
+        }
+        config_files = write_package_config(stage, windows=windows, helpers=included_helpers)
+
         manifest = {
             "product": "yazi-intranet",
             "package_version": version,
@@ -470,6 +565,13 @@ def package_target(
             "platform": target_name,
             "profile": profile,
             "zellij_bundled": False,
+            "config": {
+                "directory": "config",
+                "files": config_files,
+                "default_enabled_by_launcher": True,
+                "override_env": "YAZI_CONFIG_HOME",
+                "markdown_openers": [name for name in ("md-bat", "md-glow") if name[3:] in included_helpers],
+            },
             "yazi": {
                 "source_kind": config["yazi"]["source_kind"],
                 "repo": config["yazi"]["repo"],
@@ -552,6 +654,13 @@ def package_readme(manifest: dict[str, Any]) -> str:
         "Linux launcher exports `PATH`, `YAZI_FILE_ONE`, `MAGIC` and `LD_LIBRARY_PATH` for this process.",
         "Windows launcher exports `PATH`, `YAZI_FILE_ONE` and `MAGIC` for this process.",
         "If invoking helpers manually, add `bin` and `runtime/bin` to PATH; on Windows also add `runtime/imagemagick`.",
+        "",
+        "## Package config",
+        "",
+        "The archive contains `config/yazi.toml` and `config/README.md`.",
+        "The package launcher sets `YAZI_CONFIG_HOME` to the package config directory by default.",
+        "If `YAZI_CONFIG_HOME` is already set, the launcher preserves it so a user can select another config directory.",
+        "The config keeps Yazi's built-in Markdown/code previewer and adds available `bat`/`glow` commands to Markdown's Open with choices; it does not force a personal editor, shell, theme, or keymap.",
         "",
         "## Useful commands",
         "",
@@ -660,6 +769,25 @@ def verify_archive(archive: Path) -> None:
             raise PackageError(f"unsupported package target: {manifest.get('target')}")
         if not (root / "README.md").is_file() or not (root / "SHA256SUMS").is_file():
             raise PackageError("README.md or SHA256SUMS is missing")
+        config = manifest.get("config")
+        if not isinstance(config, dict) or config.get("override_env") != "YAZI_CONFIG_HOME":
+            raise PackageError("package config metadata is missing")
+        config_files = config.get("files")
+        if config_files != ["config/yazi.toml", "config/README.md"]:
+            raise PackageError("package config file list is incorrect")
+        for relative in config_files:
+            path = root / safe_member_name(relative)
+            if not path.is_file():
+                raise PackageError(f"missing package config file: {relative}")
+        config_text = (root / "config" / "yazi.toml").read_text(encoding="utf-8")
+        if "[preview]" not in config_text or "wrap = \"yes\"" not in config_text:
+            raise PackageError("package config is missing preview defaults")
+        if "bat" in manifest.get("helpers", {}) and manifest["helpers"]["bat"].get("status") == "included":
+            if "md-bat" not in config_text:
+                raise PackageError("package config is missing the bat Markdown opener")
+        if "glow" in manifest.get("helpers", {}) and manifest["helpers"]["glow"].get("status") == "included":
+            if "md-glow" not in config_text:
+                raise PackageError("package config is missing the glow Markdown opener")
         for line in (root / "SHA256SUMS").read_text(encoding="utf-8").splitlines():
             digest, relative = line.split("  ", 1)
             path = root / safe_member_name(relative)
@@ -672,6 +800,9 @@ def verify_archive(archive: Path) -> None:
         for path in required:
             if not path.is_file():
                 raise PackageError(f"missing required package file: {path.relative_to(root)}")
+        launcher = root / "bin" / ("yazi.cmd" if windows else "yazi")
+        if "YAZI_CONFIG_HOME" not in launcher.read_text(encoding="utf-8"):
+            raise PackageError("Yazi launcher does not configure YAZI_CONFIG_HOME")
         print(f"verified: {archive}")
 
 

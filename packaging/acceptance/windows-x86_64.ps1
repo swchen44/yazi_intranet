@@ -43,12 +43,20 @@ try {
         "bin\ffprobe.exe", "bin\jq.exe", "bin\pdftoppm.exe", "bin\rg.exe",
         "bin\fd.exe", "bin\fzf.exe", "bin\zoxide.exe", "bin\chafa.exe", "runtime\bin\file.exe",
         "runtime\share\misc\magic.mgc", "runtime\imagemagick\magick.exe",
-        "README.md", "manifest.json"
+        "config\yazi.toml", "config\README.md", "README.md", "manifest.json"
     )
     foreach ($relative in $required) {
         if (-not (Test-Path -LiteralPath (Join-Path $packageRoot.FullName $relative))) {
             throw "missing package file: $relative"
         }
+    }
+
+    $configText = Get-Content -Raw -LiteralPath (Join-Path $packageRoot.FullName "config\yazi.toml")
+    if ($configText -notmatch "\[preview\]" -or $configText -notmatch 'wrap = "yes"') {
+        throw "package config preview defaults are missing"
+    }
+    if ($configText -notmatch "md-bat" -or $configText -notmatch "md-glow") {
+        throw "package config Markdown openers are missing"
     }
 
     $env:PATH = (Join-Path $packageRoot.FullName "bin") + ";" +

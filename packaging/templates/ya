@@ -5,5 +5,6 @@ SELF_DIR="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(CDPATH= cd -- "$SELF_DIR/.." && pwd)"
 
 export PATH="$ROOT_DIR/runtime/bin:$ROOT_DIR/bin${PATH:+:$PATH}"
+export YAZI_CONFIG_HOME="${YAZI_CONFIG_HOME:-$ROOT_DIR/config}"
 
 exec "$ROOT_DIR/bin/ya.real" "$@"

@@ -29,6 +29,20 @@ fi
 [[ -x "$ROOT/runtime/bin/file.real" ]] || { echo "file helper binary missing" >&2; exit 1; }
 [[ -f "$ROOT/manifest.json" ]] || { echo "manifest missing" >&2; exit 1; }
 [[ -f "$ROOT/README.md" ]] || { echo "package README missing" >&2; exit 1; }
+[[ -f "$ROOT/config/yazi.toml" ]] || { echo "package config missing" >&2; exit 1; }
+[[ -f "$ROOT/config/README.md" ]] || { echo "package config README missing" >&2; exit 1; }
+grep -Fq '[preview]' "$ROOT/config/yazi.toml" || { echo "package config preview section missing" >&2; exit 1; }
+grep -Fq 'wrap = "yes"' "$ROOT/config/yazi.toml" || { echo "package config preview defaults missing" >&2; exit 1; }
+grep -Fq 'YAZI_CONFIG_HOME' "$ROOT/bin/yazi" || { echo "Yazi launcher does not configure YAZI_CONFIG_HOME" >&2; exit 1; }
+
+if grep -Fq '"profile": "full"' "$ROOT/manifest.json"; then
+	if [[ -x "$ROOT/bin/bat" || -x "$ROOT/runtime/bin/bat" ]]; then
+		grep -Fq 'md-bat' "$ROOT/config/yazi.toml" || { echo "bat Markdown opener missing" >&2; exit 1; }
+	fi
+	if [[ -x "$ROOT/bin/glow" || -x "$ROOT/runtime/bin/glow" ]]; then
+		grep -Fq 'md-glow' "$ROOT/config/yazi.toml" || { echo "glow Markdown opener missing" >&2; exit 1; }
+	fi
+fi
 
 PACKAGE_TARGET="$(sed -n 's/^[[:space:]]*"target"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$ROOT/manifest.json" | head -n 1)"
 case "$PACKAGE_TARGET" in

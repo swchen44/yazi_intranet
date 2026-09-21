@@ -48,7 +48,9 @@ Windows runtime acceptance。
 ```
 
 驗證 ZIP checksum、manifest target、`SHA256SUMS`、launcher、`file.exe`、magic database、
-所有 included helper 與 package README。`resvg` 若仍標示 unavailable，不得把它列為 W0 failure；
+`config\yazi.toml`、`config\README.md`、所有 included helper 與 package README。確認
+`config\yazi.toml` 含 `[preview]`、`wrap = "yes"`，full profile 並含 `md-bat` 與
+`md-glow`。`resvg` 若仍標示 unavailable，不得把它列為 W0 failure；
 要記入 capability report。
 
 ### W1：helper executable smoke
@@ -75,6 +77,18 @@ $env:Path = "$PWD\bin;$PWD\runtime\bin;$PWD\runtime\imagemagick;$env:Path"
 & .\runtime\imagemagick\magick.exe -version
 ```
 
+使用 launcher 另確認 package config 預設值與 override 行為：
+
+```powershell
+Remove-Item Env:YAZI_CONFIG_HOME -ErrorAction SilentlyContinue
+& .\bin\ya.cmd env
+$env:YAZI_CONFIG_HOME = "$env:TEMP\yazi-test-config"
+& .\bin\ya.cmd env
+```
+
+第一個命令應使用解壓目錄內的 `config`；第二個命令應保留測試者指定的 config path。
+這兩個命令屬於 launcher/config 檢查，`ya env` 需要在可用 PTY 的 Windows Terminal 執行。
+
 若 command 回報缺少 DLL，記錄缺少的 DLL、來源與 package path；不能只在測試機安裝
 額外 runtime 後就標示 bundle 通過。特別檢查 `bat.exe` 的 Visual C++ runtime。
 
@@ -85,8 +99,10 @@ $env:Path = "$PWD\bin;$PWD\runtime\bin;$PWD\runtime\imagemagick;$env:Path"
 1. 執行 `.\bin\yazi.cmd .`。
 2. 確認 Unicode filename、mouse、resize、selection、shell/open action。
 3. 執行 `ya env`，保存 terminal、adapter、SSH mode 與 image driver 輸出。
-4. 開啟 Markdown、JSON、SVG、PDF、PNG/JPEG、MP4、ZIP/7z/tar fixture。
-5. 分別記錄「helper 有執行」與「圖片在 terminal 可見」，兩者不能合併成一個結果。
+4. 在 Markdown 上開啟 `Open with`，確認 `bat`、`glow` 選項存在且命令能執行，`Enter`
+   仍使用第一個 `edit` opener。
+5. 開啟 Markdown、JSON、SVG、PDF、PNG/JPEG、MP4、ZIP/7z/tar fixture。
+6. 分別記錄「helper 有執行」與「圖片在 terminal 可見」，兩者不能合併成一個結果。
 
 ### W3：native Zellij integration
 

@@ -534,5 +534,18 @@
     "Plugins are not downloaded; package installation is offline and does not run ya pkg.",
     "Image preview still depends on the terminal graphics protocol and is tested separately from helper availability."
   ],
-  "package_sha256": "11eebde90b49d2d003135af0aa9b96b50937e2e468d4722f4c51b5c411916b29"
+  "config": {
+    "directory": "config",
+    "files": [
+      "config/yazi.toml",
+      "config/README.md"
+    ],
+    "default_enabled_by_launcher": true,
+    "override_env": "YAZI_CONFIG_HOME",
+    "markdown_openers": [
+      "md-bat",
+      "md-glow"
+    ]
+  },
+  "package_sha256": "34c238603f15188350a6d1f09da22edc5f68b91f0a9fbf5326650b5b05381357"
 }

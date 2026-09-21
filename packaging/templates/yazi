@@ -5,6 +5,7 @@ SELF_DIR="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(CDPATH= cd -- "$SELF_DIR/.." && pwd)"
 
 export PATH="$ROOT_DIR/runtime/bin:$ROOT_DIR/bin${PATH:+:$PATH}"
+export YAZI_CONFIG_HOME="${YAZI_CONFIG_HOME:-$ROOT_DIR/config}"
 export YAZI_FILE_ONE="${YAZI_FILE_ONE:-$ROOT_DIR/runtime/bin/file}"
 if [[ -f "$ROOT_DIR/runtime/share/misc/magic.mgc" ]]; then
 	export MAGIC="$ROOT_DIR/runtime/share/misc/magic.mgc"

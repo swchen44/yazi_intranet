@@ -15,8 +15,8 @@ x86_64 Linux build/test runner，不是正式部署主機；主機、帳號、SS
 - ARM64 只保留歷史 build 結果，不再產生、驗證或交付 ARM64 package。
 - 舊的 source-build 產物是 `minimal` profile；新的 official-bundle 流程預設 `full`，但 manifest 會把尚未有可靠 portable binary 的 helper 標成 `pending`/`unavailable`。
 - 目前 official bundle archive SHA-256：
-  - Linux x86_64：`11eebde90b49d2d003135af0aa9b96b50937e2e468d4722f4c51b5c411916b29`
-  - Windows x86_64：`84e7c8f05d317ff4f6a15121ff5c7d5ed69188abca3dec3222b8dcda440ca0a5`
+  - Linux x86_64 config refresh：`34c238603f15188350a6d1f09da22edc5f68b91f0a9fbf5326650b5b05381357`
+  - Windows x86_64 config refresh：`c41662b2d7706055417d8b331144fb9f815264c7492506aa8eb10290ec8dd094`
 - 舊 source-build artifact 的 SHA-256 與 ARM64 hash 只作 historical evidence，不是目前
   GitHub Release 交付檔案的 checksum。
 
@@ -99,6 +99,10 @@ swap 仍然 active。swap 只服務 build host，不可打包進 runtime archive
 - ImageMagick AppImage 在 surfer 的最小 Ubuntu baseline 實測仍找不到
   `libharfbuzz.so.0`。因此 Linux `magick` 目前是 capability `pending`，不能因為
   AppImage 能下載或能解包就宣稱 Linux bundle self-contained。
+- 重新產生 config refresh archive 時，GitHub asset gateway 曾回傳 `HTTP 504`；本機
+  已有上一輪完整、相同版本與 helper inventory 的 archive，因此用 packager 的
+  `write_package_config`、launcher、manifest、README、checksum 與 deterministic archive
+  functions 更新 config，並以 core binary digest comparison 確認沒有改動 Yazi binary。
 
 ## Target 判讀與測試隔離
 
@@ -111,6 +115,22 @@ swap 仍然 active。swap 只服務 build host，不可打包進 runtime archive
   directory、獨立 `HOME`、XDG config/cache/state，並在記錄 evidence 後清理。
 - package 的 launcher 必須以自身路徑推導 package root，不能依賴目前工作目錄
   或 host `PATH` 排序。
+
+### Package-local Yazi config
+
+- 將 `bat`、`glow` 放進 `bin/` 不會自動讓 Yazi 的 `Open with` 知道它們；Yazi
+  的 opener/rule 必須明確寫在 `config/yazi.toml`。
+- config 不能只放在使用者的 `~/.config/yazi`，因為內網 bundle 要能解壓後直接
+  使用，也不能覆蓋公司或個人的既有設定。launcher 因此預設設定
+  `YAZI_CONFIG_HOME=$PACKAGE/config`，並保留使用者原本已設定的 `YAZI_CONFIG_HOME`。
+- `bat` 與 `glow` 是 optional Markdown tools。Yazi 內建 `code` previewer 仍然存在；
+  config 只把可取得的 helper 加入 Markdown 的 `Open with` choices，缺少 helper 時
+  不留下會失敗的 opener。
+- package config 不應偷偷改 editor、shell、theme、keymap、credentials、公司路徑或
+  terminal graphics protocol。這些設定會讓 portable archive 綁定到特定使用者環境。
+- 必須同時在 archive verifier、Linux acceptance、Windows acceptance 與 package
+  README 驗證 `config/yazi.toml`，否則很容易出現「binary 已經打包，但實際 Yazi
+  沒有使用它」的假完成狀態。
 
 ## 尚未完成的驗收
 

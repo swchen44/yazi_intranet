@@ -99,6 +99,9 @@ Linux package 使用 TAR/GZIP，Windows package 使用 ZIP。兩者都提供相�
 │   ├── lib/
 │   └── share/
 │       └── misc/magic.mgc
+├── config/
+│   ├── yazi.toml
+│   └── README.md
 ├── completions/
 ├── licenses/
 ├── manifest.json
@@ -106,7 +109,23 @@ Linux package 使用 TAR/GZIP，Windows package 使用 ZIP。兩者都提供相�
 └── SHA256SUMS
 ```
 
-Linux launcher 設定 package-local `PATH`、`YAZI_FILE_ONE`、`MAGIC` 與 `LD_LIBRARY_PATH`；Windows launcher 使用 `.cmd` 設定相同概念的 `PATH`、`YAZI_FILE_ONE` 與 `MAGIC`。launcher 不修改使用者 config、state 或 cache。
+Linux launcher 設定 package-local `PATH`、`YAZI_CONFIG_HOME`、`YAZI_FILE_ONE`、`MAGIC` 與 `LD_LIBRARY_PATH`；Windows launcher 使用 `.cmd` 設定相同概念的 `PATH`、`YAZI_CONFIG_HOME`、`YAZI_FILE_ONE` 與 `MAGIC`。launcher 不修改使用者 config、state 或 cache；若使用者已設定 `YAZI_CONFIG_HOME`，launcher 保留該設定。
+
+## Package-local config policy
+
+每個 bundle 都包含 `config/yazi.toml` 與 `config/README.md`。launcher 預設把
+`YAZI_CONFIG_HOME` 指到 bundle 內的 `config/`，因此解壓後直接執行就能得到一致的
+preview/opening 行為；使用者也能在啟動前設定 `YAZI_CONFIG_HOME`，選擇自己的 config
+directory。
+
+這份 config 只做不依賴公司環境的設定：保留 Yazi 內建 `code` previewer，設定基本
+preview defaults，並在 helper 實際納入 bundle 時，為 Markdown 加入 `bat` 與 `glow`
+的 `Open with` choices。`edit` 維持第一個 opener，避免改變使用者按 `Enter` 的預期。
+缺少 optional helper 時不產生對應 opener，Yazi core 仍可啟動。
+
+config 不包含 credentials、公司路徑、個人 editor、shell、theme、keymap 或 terminal
+graphics protocol 設定。圖片、影片與 PDF 的畫面結果仍由 helper capability 及
+Windows Terminal、SSH、Zellij 的 protocol acceptance 分別判定。
 
 ## Helper policy
 

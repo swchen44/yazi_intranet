@@ -23,6 +23,11 @@ staging、archive verifier、Linux `surfer` helper acceptance 與產物已完成
 - Yazi version is explicit; the first verified version is `v26.9.1`.
 - `glow` is pinned to `v3.0.0`; `bat` is pinned to `v0.26.1`.
 - `glow` and `bat` are optional package tools, not Yazi startup prerequisites.
+- Every archive contains `config/yazi.toml` and `config/README.md`; launchers default
+  `YAZI_CONFIG_HOME` to that directory while preserving an existing user override.
+- The package config keeps Yazi's built-in code preview and adds `bat`/`glow` Markdown
+  `Open with` choices only when those helpers are included. It does not force editor,
+  shell, theme, keymap, credentials or company paths.
 - Zellij, SSH, Windows Terminal, shells, Claude Code and Codex are not bundled.
 - Linux runtime acceptance uses `ssh surfer` and a remote temporary directory without modifying existing installations.
 - Windows runtime acceptance happens only after push on a separate Windows host.
@@ -218,9 +223,16 @@ Use `ldd` for dynamic Linux helpers and fail on `not found`. Use `readelf -h` to
 
 Use PowerShell `Get-FileHash`, `Get-Command`, and `dumpbin` when available. If `dumpbin` is absent, record that PE architecture and runtime loading require the separate Windows host acceptance. Explicitly test `bat.exe` for missing Visual C++ runtime DLLs.
 
-- [ ] **Step 4: Update package README**
+- [x] **Step 4: Update package README**
 
 Document `glow README.md`, `bat README.md`, `bat --paging=never README.md`, package-local PATH launchers, Windows `YAZI_FILE_ONE`, and the fact that Yazi plugins are not installed by the package.
+
+- [x] **Step 5: Add package-local Yazi config**
+
+Generate `config/yazi.toml` and `config/README.md` from the official Python packager and
+the source-build fallback. Both Linux and Windows launchers set `YAZI_CONFIG_HOME` only when
+the user has not already set it. The verifier and acceptance scripts require the config files,
+preview defaults, and the full-profile Markdown openers.
 
 ### Task 5: Build official artifacts into `dist/official`
 
@@ -235,7 +247,7 @@ Document `glow README.md`, `bat README.md`, `bat --paging=never README.md`, pack
 - The root README provides one command for both targets and one offline verify command per archive.
 - The `dist/official` artifacts are versioned delivery files; temporary downloads remain outside the repository.
 
-- [ ] **Step 1: Package Linux x86_64**
+- [x] **Step 1: Package Linux x86_64**
 
 ```bash
 python3 packaging/package_official.py package \
@@ -244,7 +256,7 @@ python3 packaging/package_official.py package \
   --output-dir dist/official
 ```
 
-- [ ] **Step 2: Package Windows x86_64**
+- [x] **Step 2: Package Windows x86_64**
 
 ```bash
 python3 packaging/package_official.py package \
@@ -253,7 +265,7 @@ python3 packaging/package_official.py package \
   --output-dir dist/official
 ```
 
-- [ ] **Step 3: Verify both packages offline**
+- [x] **Step 3: Verify both packages offline**
 
 ```bash
 python3 packaging/package_official.py verify \
@@ -262,7 +274,7 @@ python3 packaging/package_official.py verify \
   dist/official/yazi-v26.9.1-x86_64-pc-windows-msvc-full.zip
 ```
 
-- [ ] **Step 4: Run package tests and inspect staged paths**
+- [x] **Step 4: Run package tests and inspect staged paths**
 
 ```bash
 ./packaging/tests/test-packaging.sh
@@ -271,6 +283,10 @@ git ls-files --others --exclude-standard | rg '^(yazi/|dist/)' || true
 ```
 
 The source checkout must be ignored; only intentional `dist/official` artifacts may be added.
+
+The config refresh used the previously generated v26.9.1/full archives because a fresh
+upstream download returned `HTTP 504`; core binary digests were compared before replacing
+the ignored local artifacts. A future version update still uses the normal pinned downloader.
 
 ### Task 6: Linux runtime acceptance on `surfer`
 
@@ -355,8 +371,8 @@ Include Linux `surfer` evidence and the later Windows-host evidence, including e
 
 ## Verification checklist
 
-- [x] `python3 packaging/tests/test_official_package.py` — 5 tests passed
-- [ ] `./packaging/tests/test-packaging.sh` — repository目前沒有此舊 source-build test script
+- [x] `python3 packaging/tests/test_official_package.py` — config and staging tests pass
+- [x] `./packaging/tests/test-packaging.sh` — static packaging and config checks pass
 - [x] Linux package offline verify
 - [x] Windows package offline structural verify
 - [x] Linux x86_64 helper acceptance on `ssh surfer`
@@ -366,3 +382,5 @@ Include Linux `surfer` evidence and the later Windows-host evidence, including e
 - [x] README commands and package verifier run from project root
 - [ ] Standalone PTY、Linux Zellij、Windows Zellij、Sixel/Kitty/Chafa image matrix
 - [ ] Windows Codex/Computer Use runtime acceptance plan: `docs/plans/2026-09-21-yazi-windows-acceptance.md`
+- [x] Package-local config generation, launcher selection, README, manifest and archive checks
+- [ ] Windows runtime acceptance after the updated release is available on the separate host

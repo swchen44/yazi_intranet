@@ -61,6 +61,11 @@ printf '%s' 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQU
 "$pkg/runtime/bin/file" --version | head -n 1
 "$pkg/runtime/bin/file" "$work/test.json"
 [[ -x "$pkg/bin/yazi.real" && -x "$pkg/bin/ya.real" ]]
+[[ -f "$pkg/config/yazi.toml" && -f "$pkg/config/README.md" ]]
+grep -Fq '[preview]' "$pkg/config/yazi.toml"
+grep -Fq 'YAZI_CONFIG_HOME' "$pkg/bin/yazi"
+grep -Fq 'md-bat' "$pkg/config/yazi.toml"
+grep -Fq 'md-glow' "$pkg/config/yazi.toml"
 
 echo "Linux x86_64 package/helper acceptance passed."
 echo "ImageMagick and pdftoppm remain manifest capability results when pending."

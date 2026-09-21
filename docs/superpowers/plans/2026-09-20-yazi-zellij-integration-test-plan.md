@@ -2,7 +2,7 @@
 
 ## 測試原則
 
-Yazi 與 Zellij 先各自通過 standalone 驗收，再做整合。測試不移除正式安裝；Yazi 使用 portable package 的 sandbox path，Zellij 使用獨立 package 或已核准版本。
+Yazi 與 Zellij 先各自通過 standalone 驗收，再做整合。測試不移除正式安裝；Yazi 使用 portable package 的 sandbox path，並確認 launcher 載入 package-local `config/yazi.toml`；Zellij 使用獨立 package 或已核准版本。
 
 目前 active 的 x86_64 測試主機：SSH host alias `surfer`，實際為 `ubuntu@165.154.253.51:22`。這是借用的 build/test runner，不是正式部署主機。測試目錄使用遠端 user-owned workspace 與獨立 package 目錄，不覆蓋 `/usr/bin/yazi`。ARM64 host `553588` 僅保留為 historical baseline，後續 active 測試不再連線。低記憶體 build 的完整操作經驗記錄在 `docs/superpowers/LESSONS-LEARNED.md`。
 
@@ -40,7 +40,7 @@ file wrapper 實際從 package 內的 runtime/lib 解析 libmagic.so.1、liblzma
 
 1. 解壓 `yazi-intranet-<version>-<target>.tar.gz`。
 2. 執行 `bin/yazi --version`、`bin/ya --version`。
-3. 檢查 `file`、magic database 與所有 `full` profile helpers。
+3. 檢查 `file`、magic database、`config/yazi.toml` 與所有 `full` profile helpers。
 4. 使用測試資料驗證：
    - 中文、日文、emoji 與空白檔名。
    - 目錄切換、建立、重新命名、複製、移動、刪除。
@@ -73,12 +73,12 @@ Windows Terminal
 測試：
 
 - SSH 使用 PTY 登入，啟動 Zellij session。
-- 在 Zellij pane 內以 package path 啟動 Yazi。
+- 在 Zellij pane 內以 package path 啟動 Yazi；確認 `YAZI_CONFIG_HOME` 指向 package `config/`，或明確記錄使用者 override。
 - 連續 resize Windows Terminal，確認 Yazi layout 正常重繪。
 - 測試中文檔名、滑鼠、複製/貼上、shell return path。
 - 測試 OSC 52 clipboard；記錄 Windows Terminal 是否取得遠端 clipboard。
 - 分別在 Zellij 內與 Zellij 外啟動 Yazi，對比圖片 preview。
-- 圖片預覽列為 best effort；若 Sixel 經 SSH/Zellij 不穩定，保留文字/Chafa fallback。
+- Markdown 的 `Open with` 應列出 package 內可用的 `bat`/`glow`；圖片預覽列為 best effort。若 Sixel 經 SSH/Zellij 不穩定，保留文字/Chafa fallback。
 
 ### C2. ARM64 Linux（historical baseline）
 

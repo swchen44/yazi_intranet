@@ -98,6 +98,80 @@ elif [[ ! -x "$STAGE/runtime/bin/file.real" ]]; then
 fi
 install -m 0755 "$TEMPLATES_ROOT/file" "$STAGE/runtime/bin/file"
 
+mkdir -p "$STAGE/config"
+MARKDOWN_OPENERS=()
+if [[ "$PROFILE" == full ]]; then
+	[[ -x "$STAGE/runtime/bin/bat" ]] && MARKDOWN_OPENERS+=(md-bat)
+	[[ -x "$STAGE/runtime/bin/glow" ]] && MARKDOWN_OPENERS+=(md-glow)
+fi
+
+cat > "$STAGE/config/yazi.toml" <<'EOF'
+# Package-local Yazi configuration.
+# The package launcher sets YAZI_CONFIG_HOME to this directory by default.
+# Set YAZI_CONFIG_HOME yourself to use another configuration directory.
+
+[preview]
+wrap = "yes"
+tab_size = 2
+EOF
+
+if ((${#MARKDOWN_OPENERS[@]} > 0)); then
+	cat >> "$STAGE/config/yazi.toml" <<'EOF'
+
+[opener]
+EOF
+
+	for opener in "${MARKDOWN_OPENERS[@]}"; do
+		case "$opener" in
+			md-bat)
+				cat >> "$STAGE/config/yazi.toml" <<'EOF'
+md-bat = [
+  { run = "bat --paging=never --style=plain --color=always %s", block = true, for = "unix", desc = "View Markdown with bat" },
+]
+EOF
+				;;
+			md-glow)
+				cat >> "$STAGE/config/yazi.toml" <<'EOF'
+md-glow = [
+  { run = "glow %s", block = true, for = "unix", desc = "Render Markdown with glow" },
+]
+EOF
+				;;
+		esac
+	done
+	printf '\n[[open.prepend_rules]]\nurl = "*.{md,markdown,mdown,mkdn}"\nuse = [ "edit"' >> "$STAGE/config/yazi.toml"
+	for opener in "${MARKDOWN_OPENERS[@]}"; do
+		printf ', "%s"' "$opener" >> "$STAGE/config/yazi.toml"
+	done
+	printf ' ]\n' >> "$STAGE/config/yazi.toml"
+else
+	cat >> "$STAGE/config/yazi.toml" <<'EOF'
+
+# bat/glow are not included in this profile, so no external Markdown opener is added.
+EOF
+fi
+
+MARKDOWN_OPENERS_JSON="["
+for opener in "${MARKDOWN_OPENERS[@]}"; do
+	[[ "$MARKDOWN_OPENERS_JSON" == "[" ]] || MARKDOWN_OPENERS_JSON+=", "
+	MARKDOWN_OPENERS_JSON+="\"$opener\""
+done
+MARKDOWN_OPENERS_JSON+="]"
+
+cat > "$STAGE/config/README.md" <<'EOF'
+# Package-local Yazi configuration
+
+The package launcher sets `YAZI_CONFIG_HOME` to this directory unless the user
+already set that environment variable.
+
+`yazi.toml` keeps Yazi's built-in code previewer. In the full profile, Markdown
+files expose `bat` and `glow` through Yazi's Open with action; the first `edit`
+opener remains the normal default.
+
+The config contains no credentials, company paths, editor choice, shell choice,
+or terminal-specific image protocol settings.
+EOF
+
 SOURCE_DATE_EPOCH="${YAZI_SOURCE_DATE_EPOCH:-$(git -C "$YAZI_ROOT" show -s --format=%ct HEAD 2>/dev/null || date +%s)}"
 export SOURCE_DATE_EPOCH
 FILE_VERSION="$("$STAGE/runtime/bin/file" --version 2>&1 | head -n 1 || echo unknown)"
@@ -127,6 +201,13 @@ cat > "$STAGE/manifest.json" <<EOF
   "yazi_source_commit": "$COMMIT",
   "source_date_epoch": $SOURCE_DATE_EPOCH,
   "zellij_bundled": false,
+  "config": {
+    "directory": "config",
+    "files": ["config/yazi.toml", "config/README.md"],
+    "default_enabled_by_launcher": true,
+    "override_env": "YAZI_CONFIG_HOME",
+    "markdown_openers": $MARKDOWN_OPENERS_JSON
+  },
   "helper_inventory": {
     "file": {
       "source": "Ubuntu file package on native build runner",

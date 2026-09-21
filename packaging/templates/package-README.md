@@ -38,6 +38,17 @@ Linux launcher 會設定 package-local `PATH`、`YAZI_FILE_ONE`、`MAGIC` 與
 與 `MAGIC`。若手動執行 helper，請把 `bin`、`runtime/bin` 加入 PATH；Windows
 另外加入 `runtime/imagemagick`。
 
+## Package config
+
+套件包含 `config/yazi.toml` 與 `config/README.md`。launcher 預設將
+`YAZI_CONFIG_HOME` 指向這個 package-local config；如果啟動前已設定
+`YAZI_CONFIG_HOME`，launcher 會保留使用者指定的 config directory。
+
+`yazi.toml` 保留 Yazi 內建的 Markdown/code previewer。`full` profile 若包含
+`bat` 與 `glow`，Markdown 的 `Open with` 選單會提供這兩個工具，而 `Enter` 的
+第一個 `edit` opener 仍是一般預設行為。這份 config 不強制使用者的 editor、shell、
+theme、keymap、credentials 或公司路徑。
+
 ## Scope
 
 這是 Yazi package，Zellij、SSH client 與 Windows Terminal 由各自的安裝包或主機提供。Linux 上可以先啟動 Zellij，再在 pane 內執行這個 package 的 `./bin/yazi`。

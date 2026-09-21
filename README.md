@@ -62,6 +62,11 @@ command，不代表已經包含全部 Poppler utilities；若未來需要 `pdfin
    ./bin/bat README.md
    ```
 
+   套件 launcher 會預設載入 `config/yazi.toml`，並在 Markdown 的 `Open with` 選單提供
+   已納入的 `bat`、`glow`。Yazi 原本的內建 `code` previewer 仍負責一般文字與 Markdown
+   preview；`Enter` 不會被改成直接執行外部 viewer。若你已有自己的 Yazi config，可在啟動
+   前設定 `YAZI_CONFIG_HOME`，launcher 會保留該設定。
+
 4. 若要在目前 shell 暫時加入 PATH：
 
    ```sh
@@ -71,6 +76,9 @@ command，不代表已經包含全部 Poppler utilities；若未來需要 `pdfin
 
    launcher 會另外設定 `YAZI_FILE_ONE`、`MAGIC` 與 Linux `LD_LIBRARY_PATH`；不要把
    package path 寫死到別台主機的設定檔。
+
+   套件內的 config 說明在 `config/README.md`。若只想使用 package binary 而不使用內建
+   config，可設定 `YAZI_CONFIG_HOME` 指向你自己的 config directory。
 
 5. 公司使用情境是 Windows Terminal → SSH → Linux；可以先在 SSH session 外直接測試
    Yazi，再進入獨立安裝的 Zellij。圖片、影片與 PDF 是否看得到，要另外做 terminal
@@ -95,6 +103,10 @@ command，不代表已經包含全部 Poppler utilities；若未來需要 `pdfin
    .\bin\bat.exe README.md
    ```
 
+   launcher 會預設載入 `config\yazi.toml`。Yazi 內建 preview 仍可使用；Markdown 的
+   `Open with` 會列出已納入的 `bat`、`glow`。若已有自己的 config，先設定
+   `$env:YAZI_CONFIG_HOME` 即可覆寫 package 預設值。
+
 4. 若要在目前 PowerShell 暫時加入 PATH：
 
    ```powershell
@@ -114,6 +126,9 @@ command，不代表已經包含全部 Poppler utilities；若未來需要 `pdfin
 - 目前不支援 Linux ARM64。
 - `full` 代表 catalog 中有固定 hash 且通過 extraction 的項目，不代表每個平台的每種
   preview 都已通過實機測試。
+- `config/yazi.toml` 只提供 package-safe 的 preview defaults 與可取得的 Markdown
+  opener；不包含 credentials、公司路徑、個人 editor/shell、theme 或 keymap。`bat`、
+  `glow` 缺少時，Yazi 仍可啟動並使用內建 preview。
 - Linux `magick`、Linux Poppler `pdftoppm` 目前 pending；Windows `resvg` 沒有 upstream
   Windows CLI asset。這些狀態會寫入 package `manifest.json` 與 package README。
 - 圖片顯示還受 terminal graphics protocol 影響。Yazi 文件列出 Windows Terminal
@@ -168,6 +183,14 @@ python3 packaging/package_official.py verify \
   dist/official/yazi-v26.9.1-x86_64-unknown-linux-musl-full.tar.gz
 python3 packaging/package_official.py verify \
   dist/official/yazi-v26.9.1-x86_64-pc-windows-msvc-full.zip
+```
+
+修改 package 行為時，也要驗證 config 產出與 launcher 預設值：
+
+```sh
+python3 packaging/tests/test_official_package.py
+python3 packaging/package_official.py verify \
+  dist/official/yazi-v26.9.1-x86_64-unknown-linux-musl-full.tar.gz
 ```
 
 Linux helper acceptance：
