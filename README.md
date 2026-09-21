@@ -41,6 +41,238 @@ Codex、Git 與 Yazi plugins 都是外部環境，不放進 Yazi bundle；Zellij
 command，不代表已經包含全部 Poppler utilities；若未來需要 `pdfinfo` 等工具，再另增
 明確 inventory。
 
+## Yazi 使用說明書
+
+這一節以本 project 的 `full` bundle 為準。解壓後使用 package launcher，Yazi 會自動
+使用 bundle 內的 `file(1)`、`magic.mgc`、`7zz`、`ffmpeg`、`fd`、`rg`、`fzf`、`chafa`
+與其他已納入的 helpers。
+
+### 啟動與 Help
+
+Linux：
+
+```sh
+./bin/yazi .
+./bin/yazi --help
+./bin/ya --help
+./bin/ya env
+```
+
+Windows PowerShell：
+
+```powershell
+.\bin\yazi.cmd .
+.\bin\yazi.cmd --help
+.\bin\ya.cmd --help
+.\bin\ya.cmd env
+```
+
+Yazi 執行中可用：
+
+| 按鍵 | 功能 |
+| --- | --- |
+| `F1` 或 `~` | 開啟內建 Help 與完整 keymap |
+| `q` | 離開 Yazi |
+| `Q` | 離開，並在官方 shell wrapper 中保持原本目錄 |
+| `Tab` | 查看目前檔案資訊與 MIME type |
+| `w` | 開啟 task manager，查看複製、解壓縮或刪除工作 |
+
+`?` 在 Yazi 中是「尋找上一個符合項目」，Help 使用 `F1` 或 `~`。完整按鍵定義也可
+查看官方 [keymap documentation](https://yazi-rs.github.io/docs/configuration/keymap/)。
+
+### 最常用的按鍵
+
+| 目的 | 按鍵 | 說明 |
+| --- | --- | --- |
+| 上下移動 | `j` / `k` 或 `↓` / `↑` | 移動游標 |
+| 進入/離開目錄 | `l` / `h` 或 `→` / `←` | 進入子目錄、返回上層 |
+| 捲動 preview | `J` / `K` | 向下或向上捲動 preview |
+| 選取檔案 | `Space` | 切換目前檔案選取狀態 |
+| 視覺選取 | `v` / `V` | 開啟或取消 visual selection mode |
+| 全選/反選 | `Ctrl+a` / `Ctrl+r` | 選取或反轉目前資料夾檔案 |
+| 複製/剪下 | `y` / `x` | 放入 Yazi 的 yank 清單 |
+| 貼上 | `p` | 貼到目前資料夾 |
+| 覆寫貼上 | `P` | 貼上並覆寫同名檔案 |
+| 移到垃圾桶 | `d` | 使用 trash/recycle bin |
+| 永久刪除 | `D` | 直接刪除，使用前確認目標 |
+| 新增檔案/資料夾 | `a` | 名稱以 `/` 結尾可建立資料夾 |
+| 改名 | `r` | 改名；多選後可批次改名 |
+| 顯示隱藏檔 | `.` | 切換隱藏檔顯示 |
+| 開啟檔案 | `Enter` 或 `o` | 使用預設 opener |
+| Open with | `O` | 顯示所有可用 opener |
+| 多分頁 | `t` 再按 `t` | 建立目前目錄的新 tab |
+| 切換 tab | `1` 至 `9`、`[`、`]` | 切換或前後移動 tab |
+
+### 搜尋檔案名稱與內容
+
+#### 搜尋檔案名稱
+
+游標在 Yazi 中按 `s`，輸入關鍵字後執行搜尋。這會使用 package 內的 `fd`，搜尋目前
+目錄以下的檔案與資料夾。
+
+```text
+s             搜尋檔案名稱，使用 fd
+Ctrl+s        取消搜尋
+```
+
+#### 搜尋檔案內容
+
+按大寫 `S`，輸入文字後執行內容搜尋。這會使用 package 內的 `rg`，適合找出「哪個檔案
+包含某段設定、錯誤訊息或文字」。
+
+```text
+S             搜尋檔案內容，使用 ripgrep
+Ctrl+s        取消搜尋
+```
+
+#### 目前資料夾內快速定位
+
+```text
+f             依名稱篩選目前資料夾
+/             找下一個符合項目
+?             找上一個符合項目
+n / N         跳到下一個/上一個結果
+```
+
+快速選擇常用目錄：
+
+```text
+z             使用 fzf 尋找目錄或檔案
+Z             使用 zoxide 尋找歷史目錄
+```
+
+`fd`、`rg`、`fzf`、`zoxide` 都是 optional helpers。full bundle 已納入；minimal profile
+或自訂 `YAZI_CONFIG_HOME` 時，若 helper 不在 PATH，Yazi 仍可啟動，但對應搜尋或跳轉功能
+會受限。
+
+### Markdown、文字與 Open with
+
+游標停在 Markdown 或文字檔時，右側會直接顯示內建 preview。對 Markdown 可按 `O` 選擇：
+
+| Open with 選項 | 用途 |
+| --- | --- |
+| `edit` | 使用既有 editor 開啟 |
+| `bat` | 顯示 syntax highlighting 的 Markdown/text |
+| `glow` | 在 terminal render Markdown |
+
+`Enter` 仍使用第一個 `edit` opener，不會因為 bundle 有 `bat` 或 `glow` 就改變預設行為。
+`bat` 與 `glow` 是外部 viewer，Yazi 內建 preview 不依賴它們。
+
+### 壓縮檔：預覽、Open with 與解壓縮
+
+選取 `.zip`、`.7z`、`.tar`、`.tar.gz`、`.rar` 等壓縮檔後，Yazi 會用 `7zz` 顯示內容清單。
+目前 v26.9.1 的內建 archive preview 會把路徑畫成縮排的樹狀結構，但提供捲動，不提供
+樹節點折疊/展開按鍵。需要折疊功能時，必須額外安裝相容 plugin 或自訂 previewer；本
+bundle 不會在內網自動下載 plugins。
+
+解壓縮最快的方式：
+
+1. 游標移到壓縮檔。
+2. 按 `Enter` 或 `o`，使用預設的 `Extract here`。
+3. 需要選擇操作時按 `O`，再選 `Extract here`。
+4. 按 `w` 查看解壓縮 task 的狀態。
+
+Yazi 的預設 archive `Open with` 通常包含：
+
+```text
+Extract here    使用 7zz 解壓到目前目錄
+Reveal          在檔案管理器中顯示壓縮檔位置
+```
+
+如果需要自己指定輸出資料夾，可按 `;` 或 `:` 執行 shell command：
+
+Linux：
+
+```sh
+7zz x archive.zip -o./archive
+```
+
+Windows：
+
+```powershell
+7zz.exe x archive.zip -o.\archive
+```
+
+加密壓縮檔使用 `Extract here` 時，Yazi 會要求輸入 password。多檔案批次解壓或特殊
+格式若失敗，改用 `7zz` command 可以看到更完整的錯誤訊息。
+
+### 圖片、影片與 PDF
+
+Yazi 是否能「執行 helper」與 terminal 是否能「顯示畫面」是兩個測試結果。以下是本
+project 的實際狀態：
+
+| 類型 | Yazi 使用方式 | Linux x86_64 | Windows x86_64 |
+| --- | --- | --- | --- |
+| PNG/JPEG | 內建 image preview | helper 已有；畫面取決於 terminal protocol | helper 已有；待 Windows 實測 |
+| SVG | `resvg` preview path | 已納入 | Windows upstream CLI unavailable |
+| HEIC/JXL | `magick` preview path | pending，`surfer` 缺 `libharfbuzz` | 已納入；待 Windows 實測 |
+| 影片 | `ffmpeg`/`ffprobe` 產生 thumbnail/metadata | 已納入；畫面取決於 terminal protocol | 已納入；待 Windows 實測 |
+| PDF | `pdftoppm` 產生頁面圖片 | pending，尚未納入可驗證 runtime | 已納入；待 Windows 實測 |
+| graphics fallback | `chafa` 顯示 ASCII/Unicode 圖片 | 已納入，surfer command smoke 已測 | 已納入；待 Windows 實測 |
+
+#### 公司情境一：Windows Terminal → SSH → Linux Zellij → Yazi
+
+建議順序：
+
+1. 先在 SSH session 中、Zellij 外啟動 Yazi，確認文字與圖片 preview。
+2. 再進入 Linux Zellij 執行 Yazi。
+3. 最後測試圖片、影片 thumbnail、PDF 與 `chafa` fallback。
+
+Yazi 官方指出 Zellij 的 Kitty protocol 與 Sixel 目前仍有相容性與效能限制；因此圖片
+在 Zellij 外成功、在 Zellij 內失敗時，應記錄為 terminal/Zellij graphics limitation。
+
+#### 公司情境二：Windows Terminal → Windows Zellij → Yazi
+
+先在 Windows Terminal 直接執行 `bin\yazi.cmd` 作為 control test，再進入 native Zellij
+重做相同 fixture。Windows Terminal 需要符合 Yazi 文件列出的 Sixel 支援版本；文字、
+helper command、圖片畫面與 Zellij passthrough 要分開記錄。
+
+### Shell、路徑與離開後保留目錄
+
+在 Yazi 中：
+
+```text
+;             執行 shell command
+:             執行 shell command 並等待完成
+c c           複製檔案完整 path
+c d           複製父資料夾 path
+c f           複製 filename
+c n           複製不含副檔名的 filename
+```
+
+若希望離開 Yazi 後，外部 shell 也切換到 Yazi 最後所在目錄，使用官方 `y` shell wrapper，
+而不是直接呼叫 `yazi`：
+
+```text
+y             啟動 wrapper；按 q 離開並套用新目錄
+Q             離開但不改變原本 shell 目錄
+```
+
+Yazi 官方 Quick Start 提供 Bash/Zsh、Fish、PowerShell、Command Prompt 等 shell 的
+wrapper 範例。[Shell wrapper](https://yazi-rs.github.io/docs/quick-start/#shell-wrapper)
+
+### 常見排查順序
+
+1. 按 `Tab` 檢查 MIME type，確認 `file(1)` 與 `magic.mgc` 是否正確。
+2. 執行 `./bin/ya env` 或 `.\bin\ya.cmd env`，確認 Yazi、helper、terminal adapter 與
+   `YAZI_CONFIG_HOME` 路徑。
+3. 執行 helper version command，例如 `7zz i`、`ffmpeg -version`、`pdftoppm -h`、
+   `chafa --version`。
+4. 圖片或影片無畫面時，先離開 Zellij 測試，再判斷是否為 terminal graphics protocol。
+5. PDF 在 Linux package 目前屬於 pending；Windows package 仍需在實際 Windows 主機
+   驗證 DLL 與 preview。
+6. 按 `F1` 或 `~` 查看目前版本的完整 Help，不要只依賴這份快速表格。
+
+### 官方使用說明來源
+
+- [Yazi Quick Start](https://yazi-rs.github.io/docs/quick-start/)
+- [Yazi keymap.toml](https://yazi-rs.github.io/docs/configuration/keymap/)
+- [Yazi yazi.toml](https://yazi-rs.github.io/docs/configuration/yazi/)
+- [Yazi CLI and `ya`](https://yazi-rs.github.io/docs/cli/)
+- [Yazi image preview](https://yazi-rs.github.io/docs/image-preview/)
+- [Yazi FAQ](https://yazi-rs.github.io/docs/faq/)
+- [Yazi installation dependencies](https://yazi-rs.github.io/docs/installation/)
+
 ## How: 使用者步驟
 
 ### Linux x86_64
