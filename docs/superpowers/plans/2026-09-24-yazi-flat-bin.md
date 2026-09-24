@@ -32,7 +32,7 @@
 - The tests will call `package_official.flat_destination`, `package_official.flatten_destinations`, `package_official.write_flat_linux_launchers`, and `package_official.write_flat_windows_launchers` after those interfaces are defined.
 - The tests will call `package_official.verify_archive` with a synthetic flat package.
 
-- [ ] **Step 1: Write failing tests for destination mapping and collisions**
+- [x] **Step 1: Write failing tests for destination mapping and collisions**
 
 Add tests that require these mappings:
 
@@ -52,7 +52,7 @@ Add launcher assertions for Linux `$ROOT/yazi.real`, `PATH=$ROOT`,
 assertions for `%ROOT%\yazi.real.exe`, `%ROOT%`, `%ROOT%\file.exe`, and
 `%ROOT%\data\file\magic.mgc`.
 
-- [ ] **Step 2: Run the focused tests and verify they fail**
+- [x] **Step 2: Run the focused tests and verify they fail**
 
 Run:
 
@@ -63,7 +63,7 @@ python3 -m unittest packaging.tests.test_official_package
 Expected: failure because the flat mapping and launcher functions do not yet
 exist.
 
-- [ ] **Step 3: Commit the failing tests**
+- [x] **Step 3: Commit the failing tests**
 
 ```sh
 git add packaging/tests/test_official_package.py
@@ -82,7 +82,7 @@ git commit -m "test: define Yazi flat-bin path contract"
 - Produce `write_flat_linux_launchers(stage: Path) -> None`.
 - Produce `write_flat_windows_launchers(stage: Path) -> None`.
 
-- [ ] **Step 1: Implement explicit path classes**
+- [x] **Step 1: Implement explicit path classes**
 
 Map `bin/*` to the root basename, map `runtime/bin/*` to the root basename
 for Windows DLL/helper files, map `runtime/share/misc/magic.mgc` to
@@ -92,7 +92,7 @@ for Windows DLL/helper files, map `runtime/share/misc/magic.mgc` to
 `completions/`, `licenses/`, and root documentation. Reject unknown executable
 locations and detect duplicate flat basenames before writing files.
 
-- [ ] **Step 2: Implement root launchers**
+- [x] **Step 2: Implement root launchers**
 
 The Linux launcher must use:
 
@@ -112,7 +112,7 @@ to `PATH`, set `YAZI_FILE_ONE` and `MAGIC`, set
 `%ROOT%\yazi.real.exe`. The `ya` launchers use the corresponding `ya.real`
 binary and do not override a user-supplied `YAZI_CONFIG_HOME`.
 
-- [ ] **Step 3: Run the focused tests**
+- [x] **Step 3: Run the focused tests**
 
 Run:
 
@@ -122,7 +122,7 @@ python3 -m unittest packaging.tests.test_official_package
 
 Expected: all tests pass, including the new flat mapping and launcher tests.
 
-- [ ] **Step 4: Commit the implementation**
+- [x] **Step 4: Commit the implementation**
 
 ```sh
 git add packaging/package_official.py packaging/tests/test_official_package.py
@@ -141,7 +141,7 @@ git commit -m "feat: add Yazi flat-bin launchers"
 - `package_readme(manifest)` emits layout-specific commands and PATH instructions.
 - CLI accepts `--layout standard|flat-bin`, defaulting to `standard`.
 
-- [ ] **Step 1: Add failing tests for flat manifest and verification**
+- [x] **Step 1: Add failing tests for flat manifest and verification**
 
 Add a test that builds a temporary flat root containing root launchers,
 `config/yazi.toml`, `data/file/magic.mgc`, `README.md`, `manifest.json`, and
@@ -157,7 +157,7 @@ export PATH="$HOME/local/bin/yazi_bin:$PATH"
 and does not instruct users to add `bin` or `runtime/bin` to PATH for the flat
 layout.
 
-- [ ] **Step 2: Run the new tests and verify the expected failure**
+- [x] **Step 2: Run the new tests and verify the expected failure**
 
 Run:
 
@@ -168,7 +168,7 @@ python3 -m unittest packaging.tests.test_official_package
 Expected: failure because package generation and verification still assume the
 standard `bin/` layout.
 
-- [ ] **Step 3: Implement layout-aware staging**
+- [x] **Step 3: Implement layout-aware staging**
 
 Keep standard staging byte-compatible. For flat staging, use `yazi_bin` as the
 temporary package root, stage core binaries and helper outputs through
@@ -177,7 +177,7 @@ under `data/`, write root launchers, and add `layout: flat-bin` to the manifest.
 The manifest must list the actual flat paths in `yazi.files` and each helper's
 `files` array.
 
-- [ ] **Step 4: Implement layout-aware README and archive names**
+- [x] **Step 4: Implement layout-aware README and archive names**
 
 For `flat-bin`, use:
 
@@ -190,7 +190,7 @@ The README must show root commands (`./yazi`, `./ya`, `./bat`) and only add
 the extracted `yazi_bin` directory to PATH. It must explicitly say to copy
 the complete `yazi_bin/` tree, including `data/`, `config/`, and licenses.
 
-- [ ] **Step 5: Extend verifier for both layouts and run focused tests**
+- [x] **Step 5: Extend verifier for both layouts and run focused tests**
 
 Branch on `manifest.layout`. Standard keeps its current required paths. Flat
 requires root `yazi`, `ya`, core binaries, included helper files, `config`,
@@ -204,7 +204,7 @@ python3 -m unittest packaging.tests.test_official_package
 bash packaging/tests/test-packaging.sh
 ```
 
-- [ ] **Step 6: Commit the flat package implementation**
+- [x] **Step 6: Commit the flat package implementation**
 
 ```sh
 git add packaging/package_official.py packaging/templates/package-README.md packaging/tests/test_official_package.py
@@ -226,7 +226,7 @@ git commit -m "feat: package Yazi flat-bin layout"
 - Verification command: `python3 packaging/package_official.py verify <flat-artifact>`.
 - Linux acceptance command: `packaging/acceptance/flat-bin-linux-x86_64.sh <flat-artifact>`.
 
-- [ ] **Step 1: Build flat artifacts from the pinned local/cache assets**
+- [x] **Step 1: Build flat artifacts from the pinned local/cache assets**
 
 Run serially:
 
@@ -235,7 +235,7 @@ python3 packaging/package_official.py package --target linux-x86_64 --profile fu
 python3 packaging/package_official.py package --target windows-x86_64 --profile full --layout flat-bin
 ```
 
-- [ ] **Step 2: Verify archive shape and checksums locally**
+- [x] **Step 2: Verify archive shape and checksums locally**
 
 Run:
 
@@ -247,7 +247,7 @@ python3 packaging/package_official.py verify dist/official/yazi-v26.9.1-x86_64-p
 Run an inventory assertion that every `.exe`, ELF executable, shell launcher,
 and `.cmd` in the flat archive is directly below `yazi_bin/`.
 
-- [ ] **Step 3: Update static Windows acceptance**
+- [x] **Step 3: Update static Windows acceptance**
 
 Make the acceptance script select required paths from `manifest.layout`:
 standard keeps its current paths; flat checks root commands, root DLLs, and
@@ -255,14 +255,14 @@ standard keeps its current paths; flat checks root commands, root DLLs, and
 manifest says they are included. Set `PATH` to the package root only before
 helper smoke commands.
 
-- [ ] **Step 4: Document user and developer workflows**
+- [x] **Step 4: Document user and developer workflows**
 
 Add flat artifact commands, copy-to-`~/local/bin/yazi_bin`, PATH setup,
 Windows PowerShell setup, data-directory boundary, and the standard-vs-flat
 choice to `README.md`. Record that flat package paths are tested separately
 from the standard bundle in `LESSONS-LEARNED.md`.
 
-- [ ] **Step 5: Run the complete local test set**
+- [x] **Step 5: Run the complete local test set**
 
 Run:
 
@@ -272,7 +272,7 @@ bash packaging/tests/test-packaging.sh
 git diff --check
 ```
 
-- [ ] **Step 6: Commit local artifact/documentation changes**
+- [x] **Step 6: Commit local artifact/documentation changes**
 
 ```sh
 git add README.md docs/superpowers/LESSONS-LEARNED.md packaging/acceptance
@@ -288,13 +288,13 @@ git commit -m "docs: document Yazi flat-bin acceptance"
 - Host: `ssh surfer`; no ARM64 host and no parallel commands.
 - Script: `packaging/acceptance/flat-bin-linux-x86_64.sh`.
 
-- [ ] **Step 1: Upload only the flat Linux artifact to a remote temporary path**
+- [x] **Step 1: Upload only the flat Linux artifact to a remote temporary path**
 
 Use a unique `/tmp/yazi-flat-acceptance-*` path and a clean remote HOME/XDG
 directory. Do not modify `/usr/bin/yazi`, the user config, or existing package
 directories.
 
-- [ ] **Step 2: Run flat launcher/helper smoke serially**
+- [x] **Step 2: Run flat launcher/helper smoke serially**
 
 The remote test must run with only:
 
@@ -317,17 +317,17 @@ export PATH="$pkg:$PATH"
 "$pkg/file" "$fixture"
 ```
 
-- [ ] **Step 3: Run the actual flat launcher from a different working directory**
+- [x] **Step 3: Run the actual flat launcher from a different working directory**
 
 Start `yazi` from outside the package directory with clean XDG variables and
 confirm the package config and Markdown openers resolve through the root PATH.
 
-- [ ] **Step 4: Record evidence and clean the remote temporary directory**
+- [x] **Step 4: Record evidence and clean the remote temporary directory**
 
 Record host, date, archive SHA-256, command output, and any capability limits;
 remove only the unique temporary directory and uploaded artifact.
 
-- [ ] **Step 5: Commit measured acceptance evidence**
+- [x] **Step 5: Commit measured acceptance evidence**
 
 ```sh
 git add docs/superpowers/LESSONS-LEARNED.md
@@ -336,11 +336,11 @@ git commit -m "test: record Yazi flat-bin Linux acceptance"
 
 ## Final verification checklist
 
-- [ ] `python3 -m unittest packaging.tests.test_official_package`
-- [ ] `bash packaging/tests/test-packaging.sh`
-- [ ] Standard package verification still passes for existing Linux and Windows artifacts.
-- [ ] Flat Linux and Windows archives contain `yazi_bin/` as their only root directory.
-- [ ] Flat archive has no executable below `config/`, `data/`, `completions/`, or `licenses/`.
-- [ ] Flat README documents only the package root PATH entry.
-- [ ] Linux `surfer` acceptance is recorded.
+- [x] `python3 packaging/tests/test_official_package.py`
+- [x] `bash packaging/tests/test-packaging.sh`
+- [x] Standard package verification still passes for existing Linux and Windows artifacts.
+- [x] Flat Linux and Windows archives contain `yazi_bin/` as their only root directory.
+- [x] Flat archive has no executable below `config/`, `data/`, `completions/`, or `licenses/`.
+- [x] Flat README documents only the package root PATH entry.
+- [x] Linux `surfer` acceptance is recorded.
 - [ ] Windows real-host acceptance remains explicitly marked pending until user runs it.

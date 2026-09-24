@@ -20,6 +20,12 @@ Linux ARM64 不在目前交付範圍。Zellij、SSH、Windows Terminal、shell�
 Codex、Git 與 Yazi plugins 都是外部環境，不放進 Yazi bundle；Zellij 仍由獨立 project
 管理。
 
+每個 target 可選 `standard` 或 `flat-bin` layout。`standard` 保留 `bin/`、`runtime/` 的
+既有結構；`flat-bin` 解壓後固定得到 `yazi_bin/`，所有 executable、launcher 與主要說明
+在 `yazi_bin/` 根目錄，只有 runtime data、config、completions、licenses 留在子資料夾。
+本次 flat layout 的使用方式就是把完整 `yazi_bin/` 複製到 `~/local/bin/yazi_bin/`，PATH
+只加入這一層。
+
 ### Helper capability summary
 
 | Helper / component | 功能與使用者影響 | Linux | Windows |
@@ -316,6 +322,23 @@ wrapper 範例。[Shell wrapper](https://yazi-rs.github.io/docs/quick-start/#she
    Yazi，再進入獨立安裝的 Zellij。圖片、影片與 PDF 是否看得到，要另外做 terminal
    graphics protocol 測試，不能只看 helper 版本。
 
+### Linux x86_64 `flat-bin` layout
+
+若要使用「所有執行檔集中在一個 PATH 資料夾」的版本：
+
+```sh
+tar -xzf yazi-v26.9.1-x86_64-unknown-linux-musl-flat-bin.tar.gz
+mkdir -p "$HOME/local/bin/yazi_bin"
+cp -a yazi_bin/. "$HOME/local/bin/yazi_bin/"
+export PATH="$HOME/local/bin/yazi_bin:$PATH"
+yazi .
+ya env
+```
+
+必須複製完整 `yazi_bin/`，包含 `data/`、`config/`、`completions/` 與 `licenses/`；只複製
+根目錄 executable 會使 `file(1)`、`magic.mgc` 或其他 helper 找不到。launcher 會由自身
+路徑設定 `YAZI_CONFIG_HOME`、`YAZI_FILE_ONE`、`MAGIC` 與 Linux library path。
+
 ### Windows x86_64
 
 1. 取得 `.zip`、`.sha256` 與 `.manifest.json`，在 PowerShell 驗證 checksum。
@@ -350,6 +373,22 @@ wrapper 範例。[Shell wrapper](https://yazi-rs.github.io/docs/quick-start/#she
 
 5. Windows Terminal 直接執行是 control test；之後再於獨立安裝的 native Zellij 中執行。
    Windows Terminal 的 Sixel、Zellij passthrough、ConPTY 與 resize 要分開記錄。
+
+### Windows x86_64 `flat-bin` layout
+
+PowerShell 解壓後，完整複製 `yazi_bin`，再只把它加入 PATH：
+
+```powershell
+Expand-Archive .\yazi-v26.9.1-x86_64-pc-windows-msvc-flat-bin.zip .\yazi-flat
+New-Item -ItemType Directory -Force "$HOME\local\bin\yazi_bin" | Out-Null
+Copy-Item -Recurse -Force .\yazi-flat\yazi_bin\* "$HOME\local\bin\yazi_bin\"
+$env:Path = "$HOME\local\bin\yazi_bin;$env:Path"
+yazi .
+ya env
+```
+
+`data\`、`config\`、`completions\` 與 `licenses\` 不能省略，也不能只把 `.exe` 複製到另一個
+資料夾。Windows acceptance script 會依 `manifest.layout` 驗證 flat 與 standard 兩種路徑。
 
 ## Boundary
 
@@ -399,6 +438,21 @@ python3 packaging/package_official.py package \
   --target windows-x86_64 \
   --profile full \
   --output-dir dist/official
+
+# flat-bin variant. Standard remains the default when --layout is omitted.
+python3 packaging/package_official.py package \
+  --version v26.9.1 \
+  --target linux-x86_64 \
+  --profile full \
+  --layout flat-bin \
+  --output-dir dist/official
+
+python3 packaging/package_official.py package \
+  --version v26.9.1 \
+  --target windows-x86_64 \
+  --profile full \
+  --layout flat-bin \
+  --output-dir dist/official
 ```
 
 更新版本時，只修改 `packaging/catalog.json` 的 version、URL、asset、SHA-256、license
@@ -415,6 +469,10 @@ python3 packaging/package_official.py verify \
   dist/official/yazi-v26.9.1-x86_64-unknown-linux-musl-full.tar.gz
 python3 packaging/package_official.py verify \
   dist/official/yazi-v26.9.1-x86_64-pc-windows-msvc-full.zip
+python3 packaging/package_official.py verify \
+  dist/official/yazi-v26.9.1-x86_64-unknown-linux-musl-flat-bin.tar.gz
+python3 packaging/package_official.py verify \
+  dist/official/yazi-v26.9.1-x86_64-pc-windows-msvc-flat-bin.zip
 ```
 
 修改 package 行為時，也要驗證 config 產出與 launcher 預設值：
@@ -431,6 +489,10 @@ Linux helper acceptance：
 ZELLIJ_SSH_HOST=surfer \
   packaging/acceptance/linux-x86_64.sh \
   dist/official/yazi-v26.9.1-x86_64-unknown-linux-musl-full.tar.gz
+
+YAZI_SSH_HOST=surfer \
+  packaging/acceptance/flat-bin-linux-x86_64.sh \
+  dist/official/yazi-v26.9.1-x86_64-unknown-linux-musl-flat-bin.tar.gz
 ```
 
 `surfer` 只有一顆 CPU、記憶體小；不要平行 compile 或平行驗證。Windows runtime 要
@@ -449,8 +511,10 @@ ZELLIJ_SSH_HOST=surfer \
   checksum/manifest metadata；不放 `yazi/` source checkout，也不放大型 archive。
 - `dist/official/*.tar.gz` 與 `*.zip` 已在 `.gitignore` 防止誤 commit；`.sha256`、
   `.manifest.json` 可以保留作為 release evidence。
-- 建立 GitHub Release，例如 tag `yazi-v26.9.1`，上傳兩個 archive、兩個 `.sha256` 與
-  兩個 `.manifest.json`。使用者下載 release asset 後先驗 hash，再解壓。
+- 建立 GitHub Release，例如 tag `yazi-v26.9.1`。若交付 standard 與 `flat-bin` 兩種
+  layout，就各上傳 Linux/Windows archive、`.sha256` 與 `.manifest.json`；若公司只採用
+  flat-bin，則只上傳兩個 `*-flat-bin` archive 及其 sidecars。使用者下載 release asset
+  後先驗 hash，再解壓。
 - GitHub 官方目前說明每個 Release asset 必須小於 2 GiB，Release 總大小沒有總量上限；
   本 project 的 149 MB/293 MB 產物符合這個交付模型。[GitHub releases storage limits](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases)
 - Release asset 不是內網 runtime 的網路依賴；正式交付前要把 release assets 同步到

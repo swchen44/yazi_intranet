@@ -1,6 +1,6 @@
 # Yazi 內網封裝經驗與 Lessons Learned
 
-最後更新：2026-09-21
+最後更新：2026-09-24
 
 這份文件保存目前實際建置與驗證得到的操作經驗。`surfer` 是借用的
 x86_64 Linux build/test runner，不是正式部署主機；主機、帳號、SSH 連線與
@@ -82,6 +82,10 @@ swap 仍然 active。swap 只服務 build host，不可打包進 runtime archive
   archive 與 Windows x86_64 standalone zip；Scoop Main 也有 Windows manifest。原本把
   `chafa` 判成只有 source archive 是研究錯誤，已改為 direct pinned asset，但仍須分別
   完成 Linux/Windows command、dependency 與實際 ASCII preview acceptance。
+- BtbN 的 FFmpeg `latest` download URL 會在新 autobuild 發布時原地換內容；即使
+  catalog 已記錄 SHA-256，下一次打包仍可能因 checksum mismatch 停止。FFmpeg
+  catalog 必須使用 immutable `autobuild-YYYY-MM-DD-HH-MM` release tag、固定 asset
+  名稱與 SHA-256，不能只把 `latest` URL 搭配舊 hash 留下來。
 
 ### Official bundle 實作教訓
 
@@ -103,6 +107,13 @@ swap 仍然 active。swap 只服務 build host，不可打包進 runtime archive
   已有上一輪完整、相同版本與 helper inventory 的 archive，因此用 packager 的
   `write_package_config`、launcher、manifest、README、checksum 與 deterministic archive
   functions 更新 config，並以 core binary digest comparison 確認沒有改動 Yazi binary。
+- `flat-bin` layout 的「所有 executable 在 package root」規則不等於所有 runtime file
+  都要在 root。Linux `lib*.so*` 必須留在 `data/file/lib/`，Windows ImageMagick 的
+  `.exe` 要移到 root，但 XML、ICC、policy 等資料留在 `data/imagemagick/`；verifier
+  必須允許 Linux shared library 的 executable mode，不能用 filesystem mode 粗略判斷。
+- `flat-bin` 使用者必須複製完整 `yazi_bin/` tree。只把 root commands 加入 PATH 會讓
+  `file`、`magic.mgc`、ImageMagick data 或 package config 遺失；launcher 以自身路徑推導
+  root，並只把這一層加入 PATH。
 
 ## Target 判讀與測試隔離
 
@@ -115,6 +126,15 @@ swap 仍然 active。swap 只服務 build host，不可打包進 runtime archive
   directory、獨立 `HOME`、XDG config/cache/state，並在記錄 evidence 後清理。
 - package 的 launcher 必須以自身路徑推導 package root，不能依賴目前工作目錄
   或 host `PATH` 排序。
+- `flat-bin` Linux acceptance 使用 `packaging/acceptance/flat-bin-linux-x86_64.sh`，
+  只透過 `ssh surfer` 上傳 archive 到 `/tmp`，解壓到 remote temporary directory，
+  並在測試結束刪除 archive、temporary `HOME` 與 package。Windows acceptance 則由同一
+  個 PowerShell script 依 `manifest.layout` 分支，實機仍必須由使用者執行。
+- 2026-09-24 flat-bin Linux acceptance 在 `surfer` 通過，當次 archive SHA-256 為
+  `3ab75b5c7c0a1b0e897d494aa118fdbcc43480b1e99d9c94838e9e1cdebc32ca`。`yazi`/`ya` 顯示 26.9.1，
+  `file` 使用 package-local `file.real-5.45` 與 `magic.mgc`，並實測 `glow`、`bat`、
+  `7zz`、`jq`、`resvg`、`chafa`、`rg`、`fd`、`fzf`、`zoxide`、`ffmpeg`、`ffprobe`。
+  測試使用獨立 `HOME` 與 XDG directories，沒有 root，也沒有碰既有 Yazi/Zellij。
 
 ### Package-local Yazi config
 

@@ -5,6 +5,9 @@
 - Profile: `@PROFILE@`
 - Yazi source commit: `@COMMIT@`
 
+The package may use either the standard layout or the `flat-bin` layout. The exact layout is
+recorded in `manifest.json`.
+
 ## Prerequisites
 
 This package is for the matching x86_64 target. It does not require Rust, Cargo, Git,
@@ -12,7 +15,7 @@ Scoop, apt or runtime network access. Keep the complete extracted directory.
 
 ## Run
 
-Linux x86_64：在符合 target 的 Ubuntu Linux 主機解壓後執行：
+Linux x86_64 standard layout：在符合 target 的 Ubuntu Linux 主機解壓後執行：
 
 ```sh
 ./bin/yazi
@@ -32,6 +35,24 @@ Windows x86_64 PowerShell：
 ```
 
 package launcher 會優先使用 package 內的 `runtime/bin` 與 `runtime/lib`，不需要 Rust、Cargo 或網路。請保持整個解壓後的目錄結構，不要只單獨複製 `bin/yazi.real`。
+
+`flat-bin` layout 解壓後的根目錄固定為 `yazi_bin/`。所有 executable、launcher 與主要說明
+在根目錄，runtime data 留在 `data/`，設定、completions 與 licenses 留在各自子資料夾：
+
+```sh
+cp -a yazi_bin/. "$HOME/local/bin/yazi_bin/"
+export PATH="$HOME/local/bin/yazi_bin:$PATH"
+yazi .
+```
+
+```powershell
+Copy-Item -Recurse -Force .\yazi_bin\* "$HOME\local\bin\yazi_bin\"
+$env:Path = "$HOME\local\bin\yazi_bin;$env:Path"
+yazi .
+```
+
+flat package 也必須保留完整 `data/`、`config/`、`completions/`、`licenses/`；不要只複製
+root commands，也不要把 data directories 另外加入 PATH。
 
 Linux launcher 會設定 package-local `PATH`、`YAZI_FILE_ONE`、`MAGIC` 與
 `LD_LIBRARY_PATH`；Windows launcher 會設定 package-local `PATH`、`YAZI_FILE_ONE`

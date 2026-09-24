@@ -23,6 +23,10 @@ try {
     if ($manifest.target -ne "x86_64-pc-windows-msvc") {
         throw "unexpected package target: $($manifest.target)"
     }
+    $layout = if ([string]::IsNullOrWhiteSpace($manifest.layout)) { "standard" } else { $manifest.layout }
+    if ($layout -notin @("standard", "flat-bin")) {
+        throw "unexpected package layout: $layout"
+    }
 
     $sumsPath = Join-Path $packageRoot.FullName "SHA256SUMS"
     foreach ($line in Get-Content -LiteralPath $sumsPath) {
@@ -37,17 +41,45 @@ try {
         }
     }
 
+    $flat = $layout -eq "flat-bin"
+    $commandRoot = if ($flat) { $packageRoot.FullName } else { Join-Path $packageRoot.FullName "bin" }
+    $fileRoot = if ($flat) { $packageRoot.FullName } else { Join-Path $packageRoot.FullName "runtime\bin" }
+    $magicPath = if ($flat) { Join-Path $packageRoot.FullName "data\file\magic.mgc" } else { Join-Path $packageRoot.FullName "runtime\share\misc\magic.mgc" }
+    $imageDataRoot = if ($flat) { Join-Path $packageRoot.FullName "data\imagemagick" } else { Join-Path $packageRoot.FullName "runtime\imagemagick" }
+
     $required = @(
-        "bin\yazi.real.exe", "bin\ya.real.exe", "bin\yazi.cmd", "bin\ya.cmd",
-        "bin\glow.exe", "bin\bat.exe", "bin\7zz.exe", "bin\ffmpeg.exe",
-        "bin\ffprobe.exe", "bin\jq.exe", "bin\pdftoppm.exe", "bin\rg.exe",
-        "bin\fd.exe", "bin\fzf.exe", "bin\zoxide.exe", "bin\chafa.exe", "runtime\bin\file.exe",
-        "runtime\share\misc\magic.mgc", "runtime\imagemagick\magick.exe",
-        "config\yazi.toml", "config\README.md", "README.md", "manifest.json"
+        (Join-Path $commandRoot "yazi.real.exe"), (Join-Path $commandRoot "ya.real.exe"),
+        (Join-Path $commandRoot "yazi.cmd"), (Join-Path $commandRoot "ya.cmd"),
+        $magicPath, (Join-Path $packageRoot.FullName "config\yazi.toml"),
+        (Join-Path $packageRoot.FullName "config\README.md"),
+        (Join-Path $packageRoot.FullName "README.md"),
+        (Join-Path $packageRoot.FullName "manifest.json")
     )
+    foreach ($relative in @($manifest.yazi.files)) {
+        $required += Join-Path $packageRoot.FullName ($relative.Replace("/", [IO.Path]::DirectorySeparatorChar))
+    }
+    foreach ($helperProperty in $manifest.helpers.PSObject.Properties) {
+        if ($helperProperty.Value.status -ne "included") { continue }
+        foreach ($relative in @($helperProperty.Value.files)) {
+            $required += Join-Path $packageRoot.FullName ($relative.Replace("/", [IO.Path]::DirectorySeparatorChar))
+        }
+    }
+    $required = $required | Sort-Object -Unique
     foreach ($relative in $required) {
-        if (-not (Test-Path -LiteralPath (Join-Path $packageRoot.FullName $relative))) {
+        if (-not (Test-Path -LiteralPath $relative)) {
             throw "missing package file: $relative"
+        }
+    }
+    if ($flat) {
+        if (Test-Path -LiteralPath (Join-Path $packageRoot.FullName "bin")) {
+            throw "flat package must not contain bin directory"
+        }
+        foreach ($path in Get-ChildItem -LiteralPath $packageRoot.FullName -Recurse -File) {
+            $relative = $path.FullName.Substring($packageRoot.FullName.Length + 1)
+            if ($relative -match '^(data|config|completions|licenses)\\' -and
+                $path.Extension.ToLowerInvariant() -in @(".exe", ".cmd", ".bat", ".dll")) {
+                throw "flat package executable or DLL is below a data directory: $relative"
+            }
         }
     }
 
@@ -59,25 +91,44 @@ try {
         throw "package config Markdown openers are missing"
     }
 
-    $env:PATH = (Join-Path $packageRoot.FullName "bin") + ";" +
-        (Join-Path $packageRoot.FullName "runtime\bin") + ";" +
-        (Join-Path $packageRoot.FullName "runtime\imagemagick") + ";" + $env:PATH
-    & (Join-Path $packageRoot.FullName "bin\yazi.real.exe") --version
-    & (Join-Path $packageRoot.FullName "bin\ya.real.exe") --version
-    & (Join-Path $packageRoot.FullName "bin\glow.exe") --version
-    & (Join-Path $packageRoot.FullName "bin\bat.exe") --version
-    & (Join-Path $packageRoot.FullName "bin\7zz.exe") i
-    & (Join-Path $packageRoot.FullName "bin\ffmpeg.exe") -version
-    & (Join-Path $packageRoot.FullName "bin\ffprobe.exe") -version
-    & (Join-Path $packageRoot.FullName "bin\jq.exe") --version
-    & (Join-Path $packageRoot.FullName "bin\pdftoppm.exe") -h
-    & (Join-Path $packageRoot.FullName "bin\chafa.exe") --version
-    & (Join-Path $packageRoot.FullName "bin\rg.exe") --version
-    & (Join-Path $packageRoot.FullName "bin\fd.exe") --version
-    & (Join-Path $packageRoot.FullName "bin\fzf.exe") --version
-    & (Join-Path $packageRoot.FullName "bin\zoxide.exe") --version
-    & (Join-Path $packageRoot.FullName "runtime\bin\file.exe") --version
-    & (Join-Path $packageRoot.FullName "runtime\imagemagick\magick.exe") --version
+    $pathEntries = if ($flat) {
+        @($packageRoot.FullName)
+    } else {
+        @(
+            (Join-Path $packageRoot.FullName "bin"),
+            (Join-Path $packageRoot.FullName "runtime\bin"),
+            (Join-Path $packageRoot.FullName "runtime\imagemagick")
+        )
+    }
+    $env:PATH = ($pathEntries + @($env:PATH)) -join ";"
+    $env:YAZI_FILE_ONE = Join-Path $fileRoot "file.exe"
+    $env:MAGIC = $magicPath
+    $env:MAGICK_CONFIGURE_PATH = $imageDataRoot
+    & (Join-Path $commandRoot "yazi.real.exe") --version
+    & (Join-Path $commandRoot "ya.real.exe") --version
+    $magickPath = if ($flat) { Join-Path $commandRoot "magick.exe" } else { Join-Path $imageDataRoot "magick.exe" }
+    $commands = @(
+        @{ Path = (Join-Path $commandRoot "glow.exe"); Arguments = @("--version") },
+        @{ Path = (Join-Path $commandRoot "bat.exe"); Arguments = @("--version") },
+        @{ Path = (Join-Path $commandRoot "7zz.exe"); Arguments = @("i") },
+        @{ Path = (Join-Path $commandRoot "ffmpeg.exe"); Arguments = @("-version") },
+        @{ Path = (Join-Path $commandRoot "ffprobe.exe"); Arguments = @("-version") },
+        @{ Path = (Join-Path $commandRoot "jq.exe"); Arguments = @("--version") },
+        @{ Path = (Join-Path $commandRoot "pdftoppm.exe"); Arguments = @("-h") },
+        @{ Path = (Join-Path $commandRoot "chafa.exe"); Arguments = @("--version") },
+        @{ Path = (Join-Path $commandRoot "rg.exe"); Arguments = @("--version") },
+        @{ Path = (Join-Path $commandRoot "fd.exe"); Arguments = @("--version") },
+        @{ Path = (Join-Path $commandRoot "fzf.exe"); Arguments = @("--version") },
+        @{ Path = (Join-Path $commandRoot "zoxide.exe"); Arguments = @("--version") },
+        @{ Path = (Join-Path $fileRoot "file.exe"); Arguments = @("--version") },
+        @{ Path = $magickPath; Arguments = @("--version") }
+    )
+    foreach ($command in $commands) {
+        $path = $command.Path
+        if (Test-Path -LiteralPath $path) {
+            & $path @($command.Arguments)
+        }
+    }
     Write-Output "Windows archive/hash/helper acceptance passed."
     Write-Output "Run the separate Windows Terminal/Zellij/image protocol matrix before release."
 }

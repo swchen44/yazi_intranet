@@ -15,6 +15,15 @@ ZELLIJ_SSH_HOST=surfer \
 Markdown、archive、JSON、SVG、Chafa ASCII fallback、search/jump 與 video helper。它不會把 `ya env` 當成
 non-PTY 命令執行；`ya env`、Yazi UI 與圖片 protocol 必須在 PTY 中另外驗證。
 
+flat-bin package 使用獨立 script，會在同一台 `surfer` 的 remote temporary directory
+驗證 root launcher、`data/`、`config/` 與所有 package-local helpers：
+
+```sh
+YAZI_SSH_HOST=surfer \
+  packaging/acceptance/flat-bin-linux-x86_64.sh \
+  dist/official/yazi-v26.9.1-x86_64-unknown-linux-musl-flat-bin.tar.gz
+```
+
 ## Manual PTY/integration matrix
 
 | Case | Command path | Expected evidence |

@@ -3,6 +3,9 @@
 Windows runtime 必須在 push 後的另一台 Windows x86_64 主機執行；macOS/Linux 只能
 做 ZIP、manifest、SHA-256 與檔案結構檢查，不能宣稱 Windows runtime 通過。
 
+同一個 PowerShell script 會讀取 `manifest.layout`，因此 standard 與 `flat-bin` 都使用
+同一入口；flat-bin 的具體手順另見 [`flat-bin-windows-x86_64.md`](flat-bin-windows-x86_64.md)。
+
 ## Automated archive/helper check
 
 ```powershell

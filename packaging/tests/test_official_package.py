@@ -100,8 +100,36 @@ class StagingTests(unittest.TestCase):
             packager.flat_destination("runtime/imagemagick/configure.xml"),
             "data/imagemagick/configure.xml",
         )
+        self.assertEqual(
+            packager.flat_destination("runtime/imagemagick/magick.exe"),
+            "magick.exe",
+        )
+        self.assertEqual(
+            packager.flat_destination("runtime/README.md"),
+            "FILE-RUNTIME-README.md",
+        )
         with self.assertRaises(packager.PackageError):
             packager.flatten_destinations(["bin/a", "runtime/bin/a"])
+
+    def test_flat_extract_spec_can_write_a_helper_directly_at_package_root(self) -> None:
+        archive = io.BytesIO()
+        with zipfile.ZipFile(archive, "w") as output:
+            output.writestr("helper/bin/tool", b"tool")
+        archive.seek(0)
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            spec = packager.flat_extract_spec(
+                {"extract": [{"match": "*/bin/tool", "destination_dir": "bin"}]}
+            )
+            with zipfile.ZipFile(archive) as source:
+                written = packager.extract_selected_zip(source, root, spec["extract"])
+            self.assertEqual(written, ["tool"])
+            self.assertEqual((root / "tool").read_bytes(), b"tool")
+
+    def test_flat_extract_all_spec_marks_per_file_mapping(self) -> None:
+        mapped = packager.flat_extract_spec({"extract_all_to": "runtime/imagemagick"})
+        self.assertEqual(mapped["extract_all_to"], "runtime/imagemagick")
+        self.assertTrue(mapped["_flat_extract_all_to"])
 
     def test_flat_launchers_resolve_root_and_private_data_paths(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
@@ -202,6 +230,7 @@ class StagingTests(unittest.TestCase):
                 "config/yazi.toml": b"[preview]\nwrap = \"yes\"\n",
                 "config/README.md": b"config\n",
                 "data/file/magic.mgc": b"magic\n",
+                "data/file/lib/libmagic.so.1": b"shared library\n",
             }
             manifest = {
                 "product": "yazi-intranet",
@@ -222,6 +251,7 @@ class StagingTests(unittest.TestCase):
                 path = root / name
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_bytes(data)
+            (root / "data/file/lib/libmagic.so.1").chmod(0o755)
             sums = "\n".join(
                 f"{packager.sha256_file(root / name)}  {name}"
                 for name in sorted(files)

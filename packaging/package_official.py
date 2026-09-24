@@ -85,7 +85,11 @@ def flat_destination(relative: str) -> str:
     if parts[:3] == ("runtime", "poppler", "share"):
         return "/".join(("data", "poppler", "share", *parts[3:]))
     if parts[:2] == ("runtime", "imagemagick"):
+        if path.name.lower().endswith(".exe"):
+            return path.name
         return "/".join(("data", "imagemagick", *parts[2:]))
+    if parts == ("runtime", "README.md"):
+        return "FILE-RUNTIME-README.md"
     if parts[:4] == ("runtime", "share", "licenses", "file"):
         return "/".join(("licenses", "file", *parts[4:]))
     return relative
@@ -121,7 +125,7 @@ def flat_extract_spec(spec: dict[str, Any]) -> dict[str, Any]:
 
     mapped = dict(spec)
     if "extract_all_to" in spec:
-        mapped["extract_all_to"] = flat_destination_dir(spec["extract_all_to"])
+        mapped["_flat_extract_all_to"] = True
     rules = []
     for rule in spec.get("extract", []):
         mapped_rule = dict(rule)
@@ -219,6 +223,11 @@ def matching_members(names: Iterable[str], pattern: str) -> list[str]:
     return matches
 
 
+def destination_in_dir(directory: str, basename: str) -> str:
+    directory = directory.rstrip("/")
+    return f"{directory}/{basename}" if directory else basename
+
+
 def extract_selected_zip(
     archive: zipfile.ZipFile,
     destination_root: Path,
@@ -234,7 +243,7 @@ def extract_selected_zip(
             if "destination" in rule:
                 destination = rule["destination"]
             else:
-                destination = f"{rule['destination_dir'].rstrip('/')}/{Path(name).name}"
+                destination = destination_in_dir(rule["destination_dir"], Path(name).name)
             output.append(write_member(destination_root, destination, archive.read(name), written))
     return output
 
@@ -251,7 +260,7 @@ def extract_selected_tar(
     for rule in rules:
         matches = matching_members(members.keys(), rule["match"])
         for name in matches:
-            destination = rule.get("destination") or f"{rule['destination_dir'].rstrip('/')}/{Path(name).name}"
+            destination = rule.get("destination") or destination_in_dir(rule["destination_dir"], Path(name).name)
             stream = archive.extractfile(members[name])
             if stream is None:
                 raise PackageError(f"cannot read archive member: {name}")
@@ -285,17 +294,17 @@ def extract_selected_7z(
                     listed.append(safe_member_name(name))
         subprocess.run([tool, "x", "-y", f"-o{extracted}", str(archive_path)], check=True)
         if spec.get("extract_all_to"):
-            target = destination_root / safe_member_name(spec["extract_all_to"])
-            target.mkdir(parents=True, exist_ok=True)
+            target_name = safe_member_name(spec["extract_all_to"])
             output: list[str] = []
             for source in sorted(extracted.rglob("*")):
                 if not source.is_file():
                     continue
                 relative = source.relative_to(extracted).as_posix()
-                destination = target / relative
-                destination.parent.mkdir(parents=True, exist_ok=True)
-                destination.write_bytes(source.read_bytes())
-                output.append(destination.relative_to(destination_root).as_posix())
+                if spec.get("_flat_extract_all_to"):
+                    destination_name = flat_destination(f"{target_name}/{relative}")
+                else:
+                    destination_name = f"{target_name}/{relative}"
+                output.append(write_member(destination_root, destination_name, source.read_bytes(), written))
             return output
 
         output = []
@@ -305,7 +314,7 @@ def extract_selected_7z(
                 source = extracted / Path(name)
                 if not source.is_file():
                     raise PackageError(f"7z member is not a file: {name}")
-                destination = rule.get("destination") or f"{rule['destination_dir'].rstrip('/')}/{Path(name).name}"
+                destination = rule.get("destination") or destination_in_dir(rule["destination_dir"], Path(name).name)
                 output.append(write_member(destination_root, destination, source.read_bytes(), written))
         return output
 
@@ -815,6 +824,8 @@ def package_readme(manifest: dict[str, Any]) -> str:
             "On Windows PowerShell:",
             "",
             "```powershell",
+            'New-Item -ItemType Directory -Force "$HOME\\local\\bin\\yazi_bin" | Out-Null',
+            'Copy-Item -Recurse -Force .\\yazi_bin\\* "$HOME\\local\\bin\\yazi_bin\\"',
             '$env:Path = "$HOME\\local\\bin\\yazi_bin;$env:Path"',
             "yazi.cmd .",
             "```",
@@ -1032,8 +1043,12 @@ def verify_archive(archive: Path) -> None:
                 if not path.is_file() or not path.relative_to(root).parts:
                     continue
                 relative = path.relative_to(root)
+                linux_shared_library = (
+                    not windows and path.name.startswith("lib") and ".so" in path.name
+                )
                 if relative.parts[0] in forbidden and (
-                    path.suffix.lower() in {".exe", ".cmd", ".bat"} or os.access(path, os.X_OK)
+                    path.suffix.lower() in {".exe", ".cmd", ".bat"}
+                    or (os.access(path, os.X_OK) and not linux_shared_library)
                 ):
                     raise PackageError(f"flat package executable is below a data directory: {relative}")
             launcher = root / ("yazi.cmd" if windows else "yazi")
