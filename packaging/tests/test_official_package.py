@@ -173,6 +173,67 @@ class StagingTests(unittest.TestCase):
         self.assertIn("YAZI_CONFIG_HOME", readme)
         self.assertIn("config/yazi.toml", readme)
 
+    def test_flat_package_readme_uses_only_the_package_root_on_path(self) -> None:
+        manifest = {
+            "platform": "linux-x86_64",
+            "target": "x86_64-unknown-linux-musl",
+            "package_version": "v26.9.1",
+            "profile": "full",
+            "layout": "flat-bin",
+            "yazi": {"repo": "sxyazi/yazi", "tag": "v26.9.1"},
+            "helpers": {},
+        }
+        readme = packager.package_readme(manifest)
+        self.assertIn("~/local/bin/yazi_bin", readme)
+        self.assertIn('export PATH="$HOME/local/bin/yazi_bin:$PATH"', readme)
+        self.assertIn("./yazi .", readme)
+        self.assertNotIn("add `bin`", readme)
+        self.assertNotIn("runtime/bin", readme)
+
+    def test_verify_archive_accepts_flat_bin_layout(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            files = {
+                "yazi.real": b"yazi",
+                "ya.real": b"ya",
+                "yazi": b'#!/bin/sh\nexport YAZI_CONFIG_HOME="${YAZI_CONFIG_HOME:-$ROOT/config}"\n',
+                "ya": b'#!/bin/sh\nexport YAZI_CONFIG_HOME="${YAZI_CONFIG_HOME:-$ROOT/config}"\n',
+                "README.md": b"flat package\n",
+                "config/yazi.toml": b"[preview]\nwrap = \"yes\"\n",
+                "config/README.md": b"config\n",
+                "data/file/magic.mgc": b"magic\n",
+            }
+            manifest = {
+                "product": "yazi-intranet",
+                "package_version": "v26.9.1",
+                "target": "x86_64-unknown-linux-musl",
+                "platform": "linux-x86_64",
+                "profile": "minimal",
+                "layout": "flat-bin",
+                "config": {
+                    "override_env": "YAZI_CONFIG_HOME",
+                    "files": ["config/yazi.toml", "config/README.md"],
+                },
+                "yazi": {"repo": "sxyazi/yazi", "tag": "v26.9.1"},
+                "helpers": {},
+            }
+            files["manifest.json"] = (json.dumps(manifest) + "\n").encode()
+            for name, data in files.items():
+                path = root / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(data)
+            sums = "\n".join(
+                f"{packager.sha256_file(root / name)}  {name}"
+                for name in sorted(files)
+            )
+            files["SHA256SUMS"] = (sums + "\n").encode()
+            archive = root / "flat.zip"
+            with zipfile.ZipFile(archive, "w") as output:
+                for name, data in files.items():
+                    output.writestr(f"yazi_bin/{name}", data)
+
+            packager.verify_archive(archive)
+
     def test_archive_member_names_are_rejected_when_unsafe(self) -> None:
         for name in ("/absolute", "../escape", "folder/../../escape", "C:\\escape"):
             with self.assertRaises(packager.PackageError):

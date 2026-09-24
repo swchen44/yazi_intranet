@@ -108,6 +108,32 @@ def flatten_destinations(paths: Iterable[str]) -> list[str]:
     return mapped
 
 
+def flat_destination_dir(directory: str) -> str:
+    """Map a standard destination directory for basename extraction rules."""
+
+    placeholder = flat_destination(f"{directory.rstrip('/')}/__flat_file__")
+    parent = PurePosixPath(placeholder).parent.as_posix()
+    return "" if parent == "." else parent
+
+
+def flat_extract_spec(spec: dict[str, Any]) -> dict[str, Any]:
+    """Copy an extraction spec while mapping its output paths to flat-bin."""
+
+    mapped = dict(spec)
+    if "extract_all_to" in spec:
+        mapped["extract_all_to"] = flat_destination_dir(spec["extract_all_to"])
+    rules = []
+    for rule in spec.get("extract", []):
+        mapped_rule = dict(rule)
+        if "destination" in rule:
+            mapped_rule["destination"] = flat_destination(rule["destination"])
+        if "destination_dir" in rule:
+            mapped_rule["destination_dir"] = flat_destination_dir(rule["destination_dir"])
+        rules.append(mapped_rule)
+    mapped["extract"] = rules
+    return mapped
+
+
 def sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as stream:
@@ -289,7 +315,11 @@ def extract_asset(
     spec: dict[str, Any],
     destination_root: Path,
     written: set[str],
+    *,
+    layout: str = "standard",
 ) -> list[str]:
+    if layout == "flat-bin":
+        spec = flat_extract_spec(spec)
     extractor = spec.get("extractor", "archive")
     if extractor == "raw":
         rule = spec["extract"][0]
@@ -331,7 +361,7 @@ def copy_tree(source: Path, destination: Path) -> list[str]:
     return output
 
 
-def stage_linux_file_runtime(stage: Path) -> list[str]:
+def stage_linux_file_runtime(stage: Path, *, layout: str = "standard") -> list[str]:
     source = os.environ.get(
         "YAZI_FILE_RUNTIME",
         str(ROOT / "packaging" / "source-runtime" / "runtime" / "x86_64-unknown-linux-musl"),
@@ -343,17 +373,44 @@ def stage_linux_file_runtime(stage: Path) -> list[str]:
             "packaging/vendor-file.sh x86_64-unknown-linux-musl on a Linux build host, "
             "then rerun this command (or set YAZI_FILE_RUNTIME)."
         )
-    return copy_tree(source_root, stage / "runtime")
+    if layout == "standard":
+        return copy_tree(source_root, stage / "runtime")
+    if layout != "flat-bin":
+        raise PackageError(f"unsupported package layout: {layout}")
+
+    output: list[str] = []
+    for source in sorted(source_root.rglob("*")):
+        if not source.is_file():
+            continue
+        relative = source.relative_to(source_root).as_posix()
+        if relative == "bin/file":
+            destination = "file.real"
+        else:
+            destination = flat_destination(f"runtime/{relative}")
+        target = stage / destination
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, target)
+        output.append(destination)
+    install_executable(stage / "file.real")
+    return output
 
 
-def stage_core(asset_path: Path, stage: Path, windows: bool, written: set[str]) -> list[str]:
+def stage_core(
+    asset_path: Path,
+    stage: Path,
+    windows: bool,
+    written: set[str],
+    *,
+    layout: str = "standard",
+) -> list[str]:
     output: list[str] = []
     with zipfile.ZipFile(asset_path) as archive:
         names = [safe_member_name(info.filename) for info in archive.infolist() if not info.is_dir()]
         suffix = ".exe" if windows else ""
+        executable_dir = "" if layout == "flat-bin" else "bin/"
         core_rules = [
-            {"match": f"*/yazi{suffix}", "destination": f"bin/yazi.real{suffix}"},
-            {"match": f"*/ya{suffix}", "destination": f"bin/ya.real{suffix}"},
+            {"match": f"*/yazi{suffix}", "destination": f"{executable_dir}yazi.real{suffix}"},
+            {"match": f"*/ya{suffix}", "destination": f"{executable_dir}ya.real{suffix}"},
         ]
         output.extend(extract_selected_zip(archive, stage, core_rules, written))
         for path in output[:2]:
@@ -402,6 +459,19 @@ def write_windows_launchers(stage: Path) -> None:
             f'"%ROOT%\\bin\\{real}" %*\r\n',
             encoding="utf-8",
         )
+
+
+def write_flat_file_launcher(stage: Path) -> None:
+    path = stage / "file"
+    path.write_text(
+        "#!/bin/sh\n"
+        "set -eu\n"
+        'ROOT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)\n'
+        'export LD_LIBRARY_PATH="$ROOT/data/file/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"\n'
+        'exec "$ROOT/file.real" "$@"\n',
+        encoding="utf-8",
+    )
+    install_executable(path)
 
 
 def write_flat_linux_launchers(stage: Path) -> None:
@@ -559,24 +629,37 @@ def package_target(
     output_dir: Path,
     download_dir: Path,
     profile: str,
+    layout: str = "standard",
 ) -> Path:
     config = target_config(catalog, target_name)
     if version != catalog["yazi_version"]:
         raise PackageError(f"catalog only contains Yazi {catalog['yazi_version']}, not {version}")
+    if layout not in {"standard", "flat-bin"}:
+        raise PackageError(f"unsupported package layout: {layout}")
     windows = target_name.startswith("windows")
-    package_name = f"yazi-{version}-{config['package_target']}-{profile}"
+    package_name = (
+        f"yazi-{version}-{config['package_target']}-{profile}"
+        if layout == "standard"
+        else f"yazi-{version}-{config['package_target']}-flat-bin"
+    )
     with tempfile.TemporaryDirectory(prefix="yazi-package-") as temp:
-        stage = Path(temp) / package_name
-        (stage / "bin").mkdir(parents=True)
+        stage_name = package_name if layout == "standard" else "yazi_bin"
+        stage = Path(temp) / stage_name
+        stage.mkdir(parents=True)
+        if layout == "standard":
+            (stage / "bin").mkdir(parents=True)
         (stage / "licenses").mkdir()
         written: set[str] = set()
         yazi_url, yazi_sha = github_asset(config["yazi"])
         yazi_asset = download_asset(yazi_url, yazi_sha, download_dir)
-        core_files = stage_core(yazi_asset, stage, windows, written)
+        core_files = stage_core(yazi_asset, stage, windows, written, layout=layout)
 
         linux_file_files: list[str] = []
         if not windows:
-            linux_file_files = stage_linux_file_runtime(stage)
+            linux_file_files = stage_linux_file_runtime(stage, layout=layout)
+            if layout == "flat-bin":
+                write_flat_file_launcher(stage)
+                linux_file_files.append("file")
             core_files.extend(linux_file_files)
 
         helper_inventory: dict[str, Any] = {}
@@ -606,12 +689,17 @@ def package_target(
             url, expected = github_asset(helper)
             asset = download_asset(url, expected, download_dir)
             try:
-                files = extract_asset(asset, helper, stage, written)
+                files = extract_asset(asset, helper, stage, written, layout=layout)
             except PackageError as exc:
                 raise PackageError(f"helper {name}: {exc}") from exc
             for path in files:
                 target = stage / path
-                if target.is_file() and (path.startswith("bin/") or path.startswith("runtime/bin/")):
+                should_install = (
+                    path.startswith("bin/") or path.startswith("runtime/bin/")
+                    if layout == "standard"
+                    else "/" not in path and not path.lower().endswith(".dll")
+                )
+                if target.is_file() and should_install:
                     install_executable(target)
             helper_files.extend(files)
             entry["status"] = "included"
@@ -621,12 +709,16 @@ def package_target(
                 entry["license_file"] = write_license_pointer(stage, helper)
             helper_inventory[name] = entry
 
-        if windows:
+        if windows and layout == "standard":
             write_windows_launchers(stage)
-        else:
+        elif windows:
+            write_flat_windows_launchers(stage)
+        elif layout == "standard":
             write_linux_launchers(stage)
             if (stage / "runtime" / "imagemagick" / "ImageMagick.AppImage").exists():
                 write_magick_linux_wrapper(stage)
+        else:
+            write_flat_linux_launchers(stage)
 
         included_helpers = {
             name
@@ -663,6 +755,8 @@ def package_target(
                 "Image preview still depends on the terminal graphics protocol and is tested separately from helper availability.",
             ],
         }
+        if layout == "flat-bin":
+            manifest["layout"] = "flat-bin"
         (stage / "manifest.json").write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
         (stage / "README.md").write_text(package_readme(manifest), encoding="utf-8")
         write_sha256sums(stage)
@@ -671,9 +765,9 @@ def package_target(
         if archive.exists():
             archive.unlink()
         if windows:
-            write_deterministic_zip(stage.parent, package_name, archive)
+            write_deterministic_zip(stage.parent, stage_name, archive)
         else:
-            write_deterministic_tar(stage.parent, package_name, archive)
+            write_deterministic_tar(stage.parent, stage_name, archive)
         digest = sha256_file(archive)
         (output_dir / f"{archive.name}.sha256").write_text(f"{digest}  {archive.name}\n", encoding="utf-8")
         sidecar = dict(manifest)
@@ -688,6 +782,71 @@ def package_readme(manifest: dict[str, Any]) -> str:
         for name, entry in manifest["helpers"].items()
         if entry.get("status") in {"pending", "unavailable"}
     ]
+    flat = manifest.get("layout") == "flat-bin"
+    if flat:
+        run_lines = [
+            "Linux:",
+            "",
+            "```sh",
+            "./yazi .",
+            "./ya env",
+            "./glow README.md",
+            "./bat README.md",
+            "```",
+            "",
+            "Windows PowerShell:",
+            "",
+            "```powershell",
+            ".\\yazi.cmd .",
+            ".\\ya.cmd env",
+            ".\\glow.exe README.md",
+            ".\\bat.exe README.md",
+            "```",
+        ]
+        path_lines = [
+            "Add only the complete extracted `yazi_bin` directory to PATH:",
+            "After copying, the recommended location is `~/local/bin/yazi_bin`.",
+            "",
+            "```sh",
+            'export PATH="$HOME/local/bin/yazi_bin:$PATH"',
+            "yazi .",
+            "```",
+            "",
+            "On Windows PowerShell:",
+            "",
+            "```powershell",
+            '$env:Path = "$HOME\\local\\bin\\yazi_bin;$env:Path"',
+            "yazi.cmd .",
+            "```",
+            "",
+            "Copy `data/`, `config/`, `completions/`, and `licenses/` together with the root commands.",
+            "The launcher sets the private runtime data paths for this process; do not add those data directories to PATH.",
+        ]
+    else:
+        run_lines = [
+            "Linux:",
+            "",
+            "```sh",
+            "./bin/yazi .",
+            "./bin/ya env",
+            "./bin/glow README.md",
+            "./bin/bat README.md",
+            "```",
+            "",
+            "Windows PowerShell:",
+            "",
+            "```powershell",
+            ".\\bin\\yazi.cmd .",
+            ".\\bin\\ya.cmd env",
+            ".\\bin\\glow.exe README.md",
+            ".\\bin\\bat.exe README.md",
+            "```",
+        ]
+        path_lines = [
+            "Linux launcher exports `PATH`, `YAZI_FILE_ONE`, `MAGIC` and `LD_LIBRARY_PATH` for this process.",
+            "Windows launcher exports `PATH`, `YAZI_FILE_ONE` and `MAGIC` for this process.",
+            "If invoking helpers manually, add `bin` and `runtime/bin` to PATH; on Windows also add `runtime/imagemagick`.",
+        ]
     lines = [
         "# Yazi intranet bundle",
         "",
@@ -708,29 +867,11 @@ def package_readme(manifest: dict[str, Any]) -> str:
         "",
         "## Run",
         "",
-        "Linux:",
-        "",
-        "```sh",
-        "./bin/yazi .",
-        "./bin/ya env",
-        "./bin/glow README.md",
-        "./bin/bat README.md",
-        "```",
-        "",
-        "Windows PowerShell:",
-        "",
-        "```powershell",
-        ".\\bin\\yazi.cmd .",
-        ".\\bin\\ya.cmd env",
-        ".\\bin\\glow.exe README.md",
-        ".\\bin\\bat.exe README.md",
-        "```",
+        *run_lines,
         "",
         "## Package-local PATH",
         "",
-        "Linux launcher exports `PATH`, `YAZI_FILE_ONE`, `MAGIC` and `LD_LIBRARY_PATH` for this process.",
-        "Windows launcher exports `PATH`, `YAZI_FILE_ONE` and `MAGIC` for this process.",
-        "If invoking helpers manually, add `bin` and `runtime/bin` to PATH; on Windows also add `runtime/imagemagick`.",
+        *path_lines,
         "",
         "## Package config",
         "",
@@ -872,12 +1013,37 @@ def verify_archive(archive: Path) -> None:
                 raise PackageError(f"checksum mismatch: {relative}")
         windows = manifest["platform"].startswith("windows")
         suffix = ".exe" if windows else ""
-        required = [root / "bin" / f"yazi.real{suffix}", root / "bin" / f"ya.real{suffix}"]
-        required += [root / "bin" / ("yazi.cmd" if windows else "yazi"), root / "bin" / ("ya.cmd" if windows else "ya")]
+        layout = manifest.get("layout", "standard")
+        if layout not in {"standard", "flat-bin"}:
+            raise PackageError(f"unsupported package layout: {layout}")
+        if layout == "flat-bin":
+            if root.name != "yazi_bin":
+                raise PackageError(f"flat package root must be yazi_bin, got {root.name}")
+            required = [root / f"yazi.real{suffix}", root / f"ya.real{suffix}"]
+            required += [root / ("yazi.cmd" if windows else "yazi"), root / ("ya.cmd" if windows else "ya")]
+            for entry in manifest.get("yazi", {}).get("files", []):
+                required.append(root / safe_member_name(entry))
+            for entry in manifest.get("helpers", {}).values():
+                if entry.get("status") == "included":
+                    for relative in entry.get("files", []):
+                        required.append(root / safe_member_name(relative))
+            forbidden = {"data", "config", "completions", "licenses"}
+            for path in root.rglob("*"):
+                if not path.is_file() or not path.relative_to(root).parts:
+                    continue
+                relative = path.relative_to(root)
+                if relative.parts[0] in forbidden and (
+                    path.suffix.lower() in {".exe", ".cmd", ".bat"} or os.access(path, os.X_OK)
+                ):
+                    raise PackageError(f"flat package executable is below a data directory: {relative}")
+            launcher = root / ("yazi.cmd" if windows else "yazi")
+        else:
+            required = [root / "bin" / f"yazi.real{suffix}", root / "bin" / f"ya.real{suffix}"]
+            required += [root / "bin" / ("yazi.cmd" if windows else "yazi"), root / "bin" / ("ya.cmd" if windows else "ya")]
+            launcher = root / "bin" / ("yazi.cmd" if windows else "yazi")
         for path in required:
             if not path.is_file():
                 raise PackageError(f"missing required package file: {path.relative_to(root)}")
-        launcher = root / "bin" / ("yazi.cmd" if windows else "yazi")
         if "YAZI_CONFIG_HOME" not in launcher.read_text(encoding="utf-8"):
             raise PackageError("Yazi launcher does not configure YAZI_CONFIG_HOME")
         print(f"verified: {archive}")
@@ -890,6 +1056,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     package.add_argument("--version", default=None)
     package.add_argument("--target", choices=["linux-x86_64", "windows-x86_64", "all"], default="all")
     package.add_argument("--profile", choices=["minimal", "full"], default="full")
+    package.add_argument("--layout", choices=["standard", "flat-bin"], default="standard")
     package.add_argument("--output-dir", type=Path, default=ROOT / "dist" / "official")
     package.add_argument("--download-dir", type=Path, default=DEFAULT_DOWNLOAD_DIR)
     verify = subparsers.add_parser("verify")
@@ -907,7 +1074,15 @@ def main(argv: list[str] | None = None) -> int:
         version = args.version or catalog["yazi_version"]
         targets = ["linux-x86_64", "windows-x86_64"] if args.target == "all" else [args.target]
         for target in targets:
-            archive = package_target(catalog, target, version, args.output_dir, args.download_dir, args.profile)
+            archive = package_target(
+                catalog,
+                target,
+                version,
+                args.output_dir,
+                args.download_dir,
+                args.profile,
+                args.layout,
+            )
             print(archive)
         return 0
     except (PackageError, OSError, subprocess.CalledProcessError, urllib.error.URLError) as exc:
