@@ -68,6 +68,46 @@ def safe_member_name(name: str) -> str:
     return "/".join(parts)
 
 
+def flat_destination(relative: str) -> str:
+    """Map a standard package path to the flat-bin package layout."""
+
+    relative = safe_member_name(relative)
+    path = PurePosixPath(relative)
+    parts = path.parts
+    if parts[0] == "bin":
+        return path.name
+    if parts[:2] == ("runtime", "bin"):
+        return path.name
+    if parts[:3] == ("runtime", "share", "misc"):
+        return "/".join(("data", "file", *parts[3:]))
+    if parts[:2] == ("runtime", "lib"):
+        return "/".join(("data", "file", "lib", *parts[2:]))
+    if parts[:3] == ("runtime", "poppler", "share"):
+        return "/".join(("data", "poppler", "share", *parts[3:]))
+    if parts[:2] == ("runtime", "imagemagick"):
+        return "/".join(("data", "imagemagick", *parts[2:]))
+    if parts[:4] == ("runtime", "share", "licenses", "file"):
+        return "/".join(("licenses", "file", *parts[4:]))
+    return relative
+
+
+def flatten_destinations(paths: Iterable[str]) -> list[str]:
+    """Map paths and reject two source files targeting one flat path."""
+
+    mapped: list[str] = []
+    source_by_destination: dict[str, str] = {}
+    for path in paths:
+        destination = flat_destination(path)
+        previous = source_by_destination.get(destination)
+        if previous is not None:
+            raise PackageError(
+                f"flat destination collision: {previous!r} and {path!r} -> {destination!r}"
+            )
+        source_by_destination[destination] = path
+        mapped.append(destination)
+    return mapped
+
+
 def sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as stream:
@@ -360,6 +400,43 @@ def write_windows_launchers(stage: Path) -> None:
             "set \"YAZI_FILE_ONE=%ROOT%\\runtime\\bin\\file.exe\"\r\n"
             "set \"MAGIC=%ROOT%\\runtime\\share\\misc\\magic.mgc\"\r\n"
             f'"%ROOT%\\bin\\{real}" %*\r\n',
+            encoding="utf-8",
+        )
+
+
+def write_flat_linux_launchers(stage: Path) -> None:
+    for name, real in (("yazi", "yazi.real"), ("ya", "ya.real")):
+        path = stage / name
+        path.write_text(
+            "#!/bin/sh\n"
+            "set -eu\n"
+            'ROOT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)\n'
+            'export PATH="$ROOT${PATH:+:$PATH}"\n'
+            'export YAZI_CONFIG_HOME="${YAZI_CONFIG_HOME:-$ROOT/config}"\n'
+            'export YAZI_FILE_ONE="${YAZI_FILE_ONE:-$ROOT/file}"\n'
+            'export MAGIC="${MAGIC:-$ROOT/data/file/magic.mgc}"\n'
+            'if [ -d "$ROOT/data/file/lib" ]; then\n'
+            '  export LD_LIBRARY_PATH="$ROOT/data/file/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"\n'
+            'fi\n'
+            f'exec "$ROOT/{real}" "$@"\n',
+            encoding="utf-8",
+        )
+        install_executable(path)
+
+
+def write_flat_windows_launchers(stage: Path) -> None:
+    for name, real in (("yazi", "yazi.real.exe"), ("ya", "ya.real.exe")):
+        path = stage / f"{name}.cmd"
+        path.write_text(
+            "@echo off\r\n"
+            "setlocal\r\n"
+            "for %%I in (\"%~dp0.\") do set \"ROOT=%%~fI\"\r\n"
+            "set \"PATH=%ROOT%;%PATH%\"\r\n"
+            "if not defined YAZI_CONFIG_HOME set \"YAZI_CONFIG_HOME=%ROOT%\\config\"\r\n"
+            "set \"YAZI_FILE_ONE=%ROOT%\\file.exe\"\r\n"
+            "set \"MAGIC=%ROOT%\\data\\file\\magic.mgc\"\r\n"
+            "set \"MAGICK_CONFIGURE_PATH=%ROOT%\\data\\imagemagick\"\r\n"
+            f'"%ROOT%\\{real}" %*\r\n',
             encoding="utf-8",
         )
 

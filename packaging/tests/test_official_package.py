@@ -77,6 +77,49 @@ class CatalogTests(unittest.TestCase):
 
 
 class StagingTests(unittest.TestCase):
+    def test_flat_destination_maps_runtime_paths_and_rejects_collisions(self) -> None:
+        self.assertEqual(packager.flat_destination("bin/yazi.real"), "yazi.real")
+        self.assertEqual(packager.flat_destination("bin/ffmpeg.exe"), "ffmpeg.exe")
+        self.assertEqual(
+            packager.flat_destination("runtime/bin/msys-2.0.dll"),
+            "msys-2.0.dll",
+        )
+        self.assertEqual(
+            packager.flat_destination("runtime/share/misc/magic.mgc"),
+            "data/file/magic.mgc",
+        )
+        self.assertEqual(
+            packager.flat_destination("runtime/lib/libmagic.so.1"),
+            "data/file/lib/libmagic.so.1",
+        )
+        self.assertEqual(
+            packager.flat_destination("runtime/poppler/share/CMap"),
+            "data/poppler/share/CMap",
+        )
+        self.assertEqual(
+            packager.flat_destination("runtime/imagemagick/configure.xml"),
+            "data/imagemagick/configure.xml",
+        )
+        with self.assertRaises(packager.PackageError):
+            packager.flatten_destinations(["bin/a", "runtime/bin/a"])
+
+    def test_flat_launchers_resolve_root_and_private_data_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            stage = Path(temp)
+            packager.write_flat_linux_launchers(stage)
+            linux = (stage / "yazi").read_text(encoding="utf-8")
+            self.assertIn('exec "$ROOT/yazi.real" "$@"', linux)
+            self.assertIn('export PATH="$ROOT${PATH:+:$PATH}"', linux)
+            self.assertIn('YAZI_FILE_ONE="${YAZI_FILE_ONE:-$ROOT/file}"', linux)
+            self.assertIn('MAGIC="${MAGIC:-$ROOT/data/file/magic.mgc}"', linux)
+
+            packager.write_flat_windows_launchers(stage)
+            windows = (stage / "yazi.cmd").read_text(encoding="utf-8")
+            self.assertIn('set "PATH=%ROOT%;%PATH%"', windows)
+            self.assertIn('set "YAZI_FILE_ONE=%ROOT%\\file.exe"', windows)
+            self.assertIn('set "MAGIC=%ROOT%\\data\\file\\magic.mgc"', windows)
+            self.assertIn('"%ROOT%\\yazi.real.exe" %*', windows)
+
     def test_package_config_contains_optional_markdown_openers(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             stage = Path(temp)
