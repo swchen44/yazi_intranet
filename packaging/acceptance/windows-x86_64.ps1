@@ -64,6 +64,11 @@ try {
             $required += Join-Path $packageRoot.FullName ($relative.Replace("/", [IO.Path]::DirectorySeparatorChar))
         }
     }
+    foreach ($pluginProperty in $manifest.plugins.PSObject.Properties) {
+        foreach ($relative in @($pluginProperty.Value.files)) {
+            $required += Join-Path $packageRoot.FullName ($relative.Replace("/", [IO.Path]::DirectorySeparatorChar))
+        }
+    }
     $required = $required | Sort-Object -Unique
     foreach ($relative in $required) {
         if (-not (Test-Path -LiteralPath $relative)) {
@@ -89,6 +94,16 @@ try {
     }
     if ($configText -notmatch "md-bat" -or $configText -notmatch "md-glow") {
         throw "package config Markdown openers are missing"
+    }
+    if ($manifest.plugins.PSObject.Properties.Count -gt 0) {
+        foreach ($relative in @("config\keymap.toml", "config\init.lua", "config\package.toml")) {
+            if (-not (Test-Path -LiteralPath (Join-Path $packageRoot.FullName $relative))) {
+                throw "missing plugin config: $relative"
+            }
+        }
+        if ($configText -notmatch "piper -- chafa" -or $configText -notmatch 'run = "duckdb"') {
+            throw "plugin preview rules are missing"
+        }
     }
 
     $pathEntries = if ($flat) {
@@ -120,6 +135,10 @@ try {
         @{ Path = (Join-Path $commandRoot "fd.exe"); Arguments = @("--version") },
         @{ Path = (Join-Path $commandRoot "fzf.exe"); Arguments = @("--version") },
         @{ Path = (Join-Path $commandRoot "zoxide.exe"); Arguments = @("--version") },
+        @{ Path = (Join-Path $commandRoot "duckdb.exe"); Arguments = @("--version") },
+        @{ Path = (Join-Path $commandRoot "lazygit.exe"); Arguments = @("--version") },
+        @{ Path = (Join-Path $fileRoot "sh.exe"); Arguments = @("--version") },
+        @{ Path = (Join-Path $fileRoot "tar.exe"); Arguments = @("--version") },
         @{ Path = (Join-Path $fileRoot "file.exe"); Arguments = @("--version") },
         @{ Path = $magickPath; Arguments = @("--version") }
     )
@@ -127,7 +146,55 @@ try {
         $path = $command.Path
         if (Test-Path -LiteralPath $path) {
             & $path @($command.Arguments)
+            if ($path -match '(duckdb|lazygit|sh|tar)\.exe$' -and $LASTEXITCODE -ne 0) {
+                throw "helper command failed ($LASTEXITCODE): $path"
+            }
         }
+    }
+    if ($manifest.helpers.tree.status -eq "included") {
+        $portableTools = @("ls", "cat", "less", "head", "tail", "wc", "du", "stat", "grep", "sed", "awk", "cut", "tr", "uniq", "xargs", "diff", "cygpath", "realpath", "sha256sum", "find", "sort", "tree")
+        foreach ($name in $portableTools) {
+            $expected = Join-Path $commandRoot "$name.exe"
+            if (-not (Test-Path -LiteralPath $expected)) { throw "missing bundled command: $expected" }
+            $resolved = (Get-Command "$name.exe" -CommandType Application -ErrorAction Stop).Source
+            if ($resolved -ne $expected) { throw "PATH selects $resolved instead of $expected" }
+            & $expected --version | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw "bundled command failed ($LASTEXITCODE): $expected" }
+        }
+        $fixtureDirectory = Join-Path $WorkDirectory "tree 測試 folder"
+        $childDirectory = Join-Path $fixtureDirectory "nested"
+        New-Item -ItemType Directory -Force -Path $childDirectory | Out-Null
+        Set-Content -LiteralPath (Join-Path $childDirectory "note.txt") -Value "fixture" -Encoding utf8
+        $tree = Join-Path $commandRoot "tree.exe"
+        $find = Join-Path $commandRoot "find.exe"
+        $sort = Join-Path $commandRoot "sort.exe"
+        $cygpath = Join-Path $commandRoot "cygpath.exe"
+        $treeOutput = & $tree -a -L 2 $fixtureDirectory
+        if ($LASTEXITCODE -ne 0 -or ($treeOutput -join "`n") -notmatch "note\.txt") { throw "tree.exe failed on Windows path with spaces and Unicode" }
+        $posixPath = & $cygpath -u $fixtureDirectory
+        if ($LASTEXITCODE -ne 0) { throw "cygpath.exe failed" }
+        & $tree -a -L 2 $posixPath | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "tree.exe failed on MSYS path" }
+        $found = & $find $fixtureDirectory -type f -name note.txt
+        if ($LASTEXITCODE -ne 0 -or ($found -join "`n") -notmatch "note\.txt") { throw "find.exe failed on Windows path" }
+        $sorted = @("zebra", "alpha") | & $sort
+        if ($LASTEXITCODE -ne 0 -or ($sorted -join ",") -ne "alpha,zebra") { throw "sort.exe did not use GNU sort behavior" }
+    }
+    if ($manifest.plugins.PSObject.Properties.Count -gt 0) {
+        $sh = Join-Path $fileRoot "sh.exe"
+        $tar = Join-Path $fileRoot "tar.exe"
+        $duckdb = Join-Path $commandRoot "duckdb.exe"
+        foreach ($path in @($sh, $tar, $duckdb)) {
+            if (-not (Test-Path -LiteralPath $path)) { throw "missing plugin helper: $path" }
+        }
+        $fixture = Join-Path $WorkDirectory "plugin-fixture.csv"
+        Set-Content -LiteralPath $fixture -Value @("name,value", "test,42") -Encoding utf8
+        & $sh -c 'test -f "$1"' sh $fixture
+        if ($LASTEXITCODE -ne 0) { throw "bundled sh.exe failed" }
+        & $tar --version | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "bundled tar.exe failed" }
+        & $duckdb -c "SELECT count(*) FROM read_csv_auto('$($fixture.Replace("'", "''"))')" | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "bundled duckdb.exe failed" }
     }
     Write-Output "Windows archive/hash/helper acceptance passed."
     Write-Output "Run the separate Windows Terminal/Zellij/image protocol matrix before release."

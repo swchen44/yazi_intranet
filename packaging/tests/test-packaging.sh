@@ -13,7 +13,8 @@ bash -n \
 	packaging/package.sh \
 	packaging/vendor-file.sh \
 	packaging/verify.sh \
-	packaging/acceptance/linux-x86_64.sh
+	packaging/acceptance/linux-x86_64.sh \
+	packaging/acceptance/flat-bin-linux-x86_64.sh
 
 grep -Fq 'YAZI_CONFIG_HOME' packaging/package_official.py
 grep -Fq 'YAZI_CONFIG_HOME' packaging/package.sh

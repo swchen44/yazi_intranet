@@ -12,6 +12,7 @@ import argparse
 import fnmatch
 import gzip
 import hashlib
+import io
 import json
 import os
 import shutil
@@ -21,6 +22,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import tomllib
 import urllib.error
 import urllib.request
 import zipfile
@@ -337,12 +339,49 @@ def extract_asset(
         return [destination]
     if extractor == "7zz":
         return extract_selected_7z(asset_path, destination_root, spec, written)
+    if extractor == "tar.zst":
+        tool = shutil.which("7zz") or shutil.which("7z")
+        if not tool:
+            raise PackageError("7zz or 7z is required to extract a pinned .tar.zst helper asset")
+        decompressed = subprocess.run(
+            [tool, "x", "-so", str(asset_path)], capture_output=True, check=True
+        ).stdout
+        with tarfile.open(fileobj=io.BytesIO(decompressed), mode="r:") as archive:
+            return extract_selected_tar(archive, destination_root, spec["extract"], written)
     if extractor == "zip" or asset_path.suffix == ".zip":
         with zipfile.ZipFile(asset_path) as archive:
             return extract_selected_zip(archive, destination_root, spec["extract"], written)
     mode = "r:xz" if asset_path.name.endswith(".xz") else "r:gz"
     with tarfile.open(asset_path, mode) as archive:
         return extract_selected_tar(archive, destination_root, spec["extract"], written)
+
+
+def extract_plugin_archive(asset_path: Path, stage: Path, name: str, source_subdir: str) -> list[str]:
+    """Stage a pinned Yazi Lua plugin without repository test or media files."""
+    destination = f"config/plugins/{name}.yazi"
+    written: set[str] = set()
+    files: list[str] = []
+    with zipfile.ZipFile(asset_path) as archive:
+        for info in archive.infolist():
+            member = safe_member_name(info.filename)
+            parts = PurePosixPath(member).parts
+            if info.is_dir() or len(parts) < 2:
+                continue
+            relative_parts = parts[1:]
+            if source_subdir != ".":
+                prefix = PurePosixPath(source_subdir).parts
+                if relative_parts[: len(prefix)] != prefix:
+                    continue
+                relative_parts = relative_parts[len(prefix) :]
+            if len(relative_parts) != 1:
+                continue
+            filename = relative_parts[0]
+            if not (filename.endswith(".lua") or filename in {"README.md", "LICENSE"}):
+                continue
+            files.append(write_member(stage, f"{destination}/{filename}", archive.read(info), written))
+    if f"{destination}/main.lua" not in files or f"{destination}/LICENSE" not in files:
+        raise PackageError(f"plugin {name}: main.lua or LICENSE missing from pinned source")
+    return sorted(files)
 
 
 def source_date_epoch() -> int:
@@ -520,11 +559,15 @@ def write_flat_windows_launchers(stage: Path) -> None:
         )
 
 
-def write_package_config(stage: Path, *, windows: bool, helpers: set[str]) -> list[str]:
+def write_package_config(
+    stage: Path, *, windows: bool, helpers: set[str], plugins: set[str] | None = None
+) -> list[str]:
     config_dir = stage / "config"
     config_dir.mkdir(parents=True, exist_ok=True)
+    plugins = plugins or set()
     command_suffix = ".exe" if windows else ""
-    platform = "Windows" if windows else "Linux/macOS"
+    platform = "Windows" if windows else "Linux"
+    family = "windows" if windows else "unix"
     lines = [
         "# Package-local Yazi configuration.",
         "# The package launcher sets YAZI_CONFIG_HOME to this directory by default.",
@@ -539,41 +582,67 @@ def write_package_config(stage: Path, *, windows: bool, helpers: set[str]) -> li
         openers.append("md-bat")
     if "glow" in helpers:
         openers.append("md-glow")
-    if openers:
+    if openers or plugins:
         lines.extend(["", "[opener]"])
+        if windows:
+            lines.extend([
+                'open = [{ run = \'cmd /c start "" "%s1"\', orphan = true, for = "windows", desc = "Open with System Default" }]',
+                'reveal = [{ run = \'explorer /select,"%s1"\', orphan = true, for = "windows", desc = "Reveal in Explorer" }]',
+                'md-vscode = [{ run = "code.cmd --reuse-window %s", orphan = true, for = "windows", desc = "Open with VS Code" }]',
+                'md-chrome = [{ run = \'cmd /c start "" chrome.exe "%s1"\', orphan = true, for = "windows", desc = "Open with Google Chrome" }]',
+            ])
+        else:
+            lines.extend([
+                'open = [{ run = "xdg-open %s1", orphan = true, for = "linux", desc = "Open with System Default" }]',
+                'reveal = [{ run = \'xdg-open "$(dirname "$1")"\', orphan = true, for = "linux", desc = "Open containing folder" }]',
+                'md-vscode = [{ run = "code --reuse-window %s", orphan = true, for = "linux", desc = "Open with VS Code" }]',
+                'md-chrome = [{ run = "google-chrome %s1", orphan = true, for = "linux", desc = "Open with Google Chrome" }]',
+            ])
         if "md-bat" in openers:
-            lines.append(
-                "md-bat = ["
-            )
-            lines.append(
-                f'  {{ run = "bat{command_suffix} --paging=never --style=plain --color=always %s", '
-                f'block = true, for = "{"windows" if windows else "unix"}", desc = "View Markdown with bat" }},'
-            )
-            lines.append(
-                "]"
-            )
+            lines.extend([
+                "md-bat = [",
+                f'  {{ run = "bat{command_suffix} --paging=never --style=plain --color=always %s", block = true, for = "{family}", desc = "Render with Bat" }},',
+                "]",
+            ])
         if "md-glow" in openers:
-            lines.append("md-glow = [")
-            lines.append(
-                f'  {{ run = "glow{command_suffix} %s", block = true, '
-                f'for = "{"windows" if windows else "unix"}", desc = "Render Markdown with glow" }},'
-            )
-            lines.append("]")
-        lines.extend(
-            [
-                "",
-                "[[open.prepend_rules]]",
-                'url = "*.{md,markdown,mdown,mkdn}"',
-                f'use = [ "edit", {", ".join(f"\"{name}\"" for name in openers)} ]',
-            ]
-        )
-    else:
-        lines.extend(
-            [
-                "",
-                "# bat/glow are not included in this profile, so no external Markdown opener is added.",
-            ]
-        )
+            lines.extend([
+                "md-glow = [",
+                f'  {{ run = "glow{command_suffix} %s", block = true, for = "{family}", desc = "Render with Glow" }},',
+                "]",
+            ])
+        if "chafa" in helpers:
+            command = 'chafa.exe --format=symbols --animate=off %s1 | more' if windows else 'chafa --format=symbols --animate=off %s1 | less -R'
+            lines.append(f'img-chafa = [{{ run = "{command}", block = true, for = "{family}", desc = "Render with Chafa" }}]')
+        if "ffmpeg" in helpers:
+            command = 'ffprobe.exe -hide_banner %s1 | more' if windows else 'ffprobe -hide_banner %s1 2>&1 | less -R'
+            lines.append(f'media-metadata = [{{ run = "{command}", block = true, for = "{family}", desc = "Show media metadata with FFprobe" }}]')
+        markdown = ["edit", *openers, "md-vscode", "md-chrome", "reveal"]
+        lines.extend([
+            "", "[[open.prepend_rules]]", 'url = "*.{md,markdown,mdown,mkdn}"',
+            f'use = [ {", ".join(json.dumps(x) for x in markdown)} ]',
+        ])
+        image = ["open"] + (["img-chafa"] if "chafa" in helpers else []) + (["media-metadata"] if "ffmpeg" in helpers else []) + ["reveal"]
+        lines.extend(["", "[[open.prepend_rules]]", 'mime = "image/*"', f'use = [ {", ".join(json.dumps(x) for x in image)} ]'])
+        lines.extend(["", "[[open.prepend_rules]]", 'mime = "application/pdf"', 'use = [ "open", "reveal" ]'])
+        media = ["open"] + (["media-metadata"] if "ffmpeg" in helpers else []) + ["reveal"]
+        lines.extend(["", "[[open.prepend_rules]]", 'mime = "{audio,video}/*"', f'use = [ {", ".join(json.dumps(x) for x in media)} ]'])
+    if "piper" in plugins:
+        lines.extend(["", "# tar is package-local on Windows; Ubuntu supplies tar on Linux.", "[[plugin.prepend_previewers]]", 'url = "*.{tgz,tar.gz}"', 'run = \'piper -- tar -tzf "$1"\''])
+        if "chafa" in helpers:
+            lines.extend(["", "# Chafa text preview also works inside Zellij without image protocol support.", "[[plugin.prepend_previewers]]", 'mime = "image/*"', 'run = \'piper -- chafa --format=symbols --animate=off --size="${w}x${h}" "$1"\''])
+        if "glow" in helpers:
+            lines.extend(["", "[[plugin.prepend_previewers]]", 'url = "*.{md,markdown,mdown,mkdn}"', 'run = \'piper -- CLICOLOR_FORCE=1 glow -w=$w -s=dark "$1"\''])
+    if "preview-git" in plugins:
+        lines.extend(["", "[[plugin.prepend_previewers]]", 'url = "**/.git/"', 'run = "preview-git"'])
+    if "rich-preview" in plugins:
+        lines.extend(["", "# rich-preview falls back to Yazi code preview if rich is absent.", "[[plugin.prepend_previewers]]", 'url = "*.ipynb"', 'run = "rich-preview"'])
+    if "git" in plugins:
+        for url in ("*", "*/"):
+            lines.extend(["", "[[plugin.prepend_fetchers]]", f'url = "{url}"', 'run = "git"', 'group = "git"'])
+    if "duckdb" in plugins and "duckdb" in helpers:
+        for extension in ("csv", "tsv", "parquet"):
+            lines.extend(["", "[[plugin.prepend_previewers]]", f'url = "*.{extension}"', 'run = "duckdb"'])
+            lines.extend(["", "[[plugin.prepend_preloaders]]", f'url = "*.{extension}"', 'run = "duckdb"', "multi = false"])
     lines.extend(
         [
             "",
@@ -583,6 +652,33 @@ def write_package_config(stage: Path, *, windows: bool, helpers: set[str]) -> li
     )
     config_path = config_dir / "yazi.toml"
     config_path.write_text("\n".join(lines), encoding="utf-8")
+    output = ["config/yazi.toml"]
+    if plugins:
+        keymap = ["# O keeps Yazi's native Open with menu."]
+        if "open-with-cmd" in plugins:
+            keymap.extend([
+                "", "[[mgr.prepend_keymap]]", 'on = "o"', 'run = "plugin open-with-cmd -- block"', 'desc = "Open with command in the terminal"',
+                "", "[[mgr.prepend_keymap]]", 'on = "<C-o>"', 'run = "plugin open-with-cmd"', 'desc = "Open with command"',
+            ])
+        if "lazygit" in plugins and "lazygit" in helpers:
+            keymap.extend(["", "[[mgr.prepend_keymap]]", 'on = [ "g", "i" ]', 'run = "plugin lazygit"', 'desc = "Run lazygit"'])
+        (config_dir / "keymap.toml").write_text("\n".join(keymap) + "\n", encoding="utf-8")
+        output.append("config/keymap.toml")
+        init = []
+        if "duckdb" in plugins and "duckdb" in helpers:
+            init.append('require("duckdb"):setup()')
+        if "git" in plugins:
+            init.append('require("git"):setup { order = 1500 }')
+        if "custom-shell" in plugins:
+            init.extend([
+                'local history_root = os.getenv("APPDATA") or os.getenv("HOME")',
+                'if history_root then',
+                '  local sep = ya.target_family() == "windows" and "\\\\" or "/"',
+                '  require("custom-shell"):setup { history_path = history_root .. sep .. "yazi_custom_shell_history", save_history = true }',
+                'end',
+            ])
+        (config_dir / "init.lua").write_text("\n".join(init) + "\n", encoding="utf-8")
+        output.append("config/init.lua")
     readme_path = config_dir / "README.md"
     readme_path.write_text(
         "\n".join(
@@ -592,18 +688,18 @@ def write_package_config(stage: Path, *, windows: bool, helpers: set[str]) -> li
                 "The package launcher sets `YAZI_CONFIG_HOME` to this directory unless the "
                 "user already set that environment variable.",
                 "",
-                "`yazi.toml` keeps Yazi's built-in code previewer. When the matching helper "
-                "is included, Markdown files expose `bat` and/or `glow` through Yazi's "
-                "Open with action; the first `edit` opener remains the normal default.",
+                "`yazi.toml` activates only previewers whose plugin and helper are bundled. "
+                "`rich-preview` falls back to the built-in code preview if `rich` is absent.",
                 "",
-                "The config contains no credentials, company paths, editor choice, shell "
-                "choice, or terminal-specific image protocol settings.",
+                "`O` opens the native Open with menu. `o` and Ctrl+O use OpenWithCmd "
+                "when that plugin is bundled. VS Code, Chrome, desktop openers and Git "
+                "need the corresponding host application.",
                 "",
             ]
         ),
         encoding="utf-8",
     )
-    return ["config/yazi.toml", "config/README.md"]
+    return output + ["config/README.md"]
 
 
 def write_magick_linux_wrapper(stage: Path) -> None:
@@ -629,6 +725,40 @@ def write_license_pointer(stage: Path, helper: dict[str, Any]) -> str:
         encoding="utf-8",
     )
     return path.relative_to(stage).as_posix()
+
+
+def stage_plugins(
+    stage: Path, plugins: list[dict[str, Any]], download_dir: Path
+) -> tuple[list[str], dict[str, Any]]:
+    files: list[str] = []
+    inventory: dict[str, Any] = {}
+    lock_lines: list[str] = []
+    for plugin in plugins:
+        name = plugin["name"]
+        asset = download_asset(plugin["url"], plugin["sha256"], download_dir)
+        extracted = extract_plugin_archive(asset, stage, name, plugin["source_subdir"])
+        files.extend(extracted)
+        inventory[name] = {
+            "use": plugin["use"],
+            "rev": plugin["rev"],
+            "hash": plugin["hash"],
+            "url": plugin["url"],
+            "sha256": plugin["sha256"],
+            "files": extracted,
+        }
+        lock_lines.extend([
+            "[[plugin.deps]]",
+            f'use = "{plugin["use"]}"',
+            f'rev = "={plugin["rev"]}"',
+            f'hash = "{plugin["hash"]}"',
+            "",
+        ])
+    lock_lines.extend(["[flavor]", "deps = []", ""])
+    path = stage / "config/package.toml"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(lock_lines), encoding="utf-8")
+    files.append("config/package.toml")
+    return files, inventory
 
 
 def package_target(
@@ -734,7 +864,16 @@ def package_target(
             for name, entry in helper_inventory.items()
             if entry.get("status") == "included"
         }
-        config_files = write_package_config(stage, windows=windows, helpers=included_helpers)
+        plugin_files: list[str] = []
+        plugin_inventory: dict[str, Any] = {}
+        if profile == "full":
+            plugin_files, plugin_inventory = stage_plugins(stage, catalog.get("plugins", []), download_dir)
+        config_files = write_package_config(
+            stage,
+            windows=windows,
+            helpers=included_helpers,
+            plugins=set(plugin_inventory),
+        ) + plugin_files
 
         manifest = {
             "product": "yazi-intranet",
@@ -759,9 +898,10 @@ def package_target(
                 "files": core_files,
             },
             "helpers": helper_inventory,
+            "plugins": plugin_inventory,
             "notes": [
-                "Plugins are not downloaded; package installation is offline and does not run ya pkg.",
-                "Image preview still depends on the terminal graphics protocol and is tested separately from helper availability.",
+                "Pinned plugins are bundled; package installation is offline and does not run ya pkg.",
+                "Chafa text preview works without an image protocol when piper and a shell are available.",
             ],
         }
         if layout == "flat-bin":
@@ -866,14 +1006,14 @@ def package_readme(manifest: dict[str, Any]) -> str:
         f"- Yazi: `{manifest['package_version']}`",
         f"- Profile: `{manifest['profile']}`",
         "",
-        "This archive is standalone and does not include Zellij, terminal, SSH, shell, Git, or Yazi plugins.",
-        "Launch Yazi through the package launcher so the package-local helpers and file(1) are used.",
+        "This archive includes pinned Yazi plugins in the full profile. Zellij and Git are supplied separately.",
+        "Launch Yazi through the package launcher so the package-local helpers, plugins and file(1) are used.",
         "",
         "## Prerequisites",
         "",
         "- Matching x86_64 host: Linux `x86_64-unknown-linux-musl` or Windows `x86_64-pc-windows-msvc`.",
-        "- No Rust, Cargo, Git, Scoop, apt or runtime network access is required.",
-        "- Linux launcher needs a POSIX `sh`; Windows launcher uses `cmd.exe`/PowerShell.",
+        "- No Rust, Cargo, Scoop, apt or runtime network access is required. Git plugins need host Git.",
+        "- Linux launcher and Piper need POSIX `sh`; Ubuntu also supplies `tar`. Windows launcher uses `cmd.exe` and the bundle supplies `sh.exe`/`tar.exe`.",
         "- Image visibility still depends on the terminal graphics protocol, SSH and/or Zellij; helper presence alone is not an image acceptance result.",
         "",
         "## Run",
@@ -886,10 +1026,12 @@ def package_readme(manifest: dict[str, Any]) -> str:
         "",
         "## Package config",
         "",
-        "The archive contains `config/yazi.toml` and `config/README.md`.",
+        "The archive contains `config/yazi.toml` and `config/README.md`; the full profile also contains `keymap.toml`, `init.lua`, `package.toml` and pinned plugins.",
         "The package launcher sets `YAZI_CONFIG_HOME` to the package config directory by default.",
         "If `YAZI_CONFIG_HOME` is already set, the launcher preserves it so a user can select another config directory.",
-        "The config keeps Yazi's built-in Markdown/code previewer and adds available `bat`/`glow` commands to Markdown's Open with choices; it does not force a personal editor, shell, theme, or keymap.",
+        "In the full profile, Chafa renders image previews as terminal text, DuckDB renders CSV/TSV/Parquet, and `tar` lists `.tgz`/`.tar.gz` content. Markdown uses Glow in the right preview and exposes Bat/Glow in Open with.",
+        "The `.ipynb` rich-preview plugin falls back to Yazi's code preview when `rich` is absent. Install `rich-cli` later only if formatted notebook preview is desired.",
+        "`O` opens the native Open with menu; `o` prompts for a command. VS Code, Chrome and desktop openers need those host applications and a GUI session. Git plugins need host Git.",
         "",
         "## Useful commands",
         "",
@@ -907,14 +1049,25 @@ def package_readme(manifest: dict[str, Any]) -> str:
         "",
         "## Boundary",
         "",
-        "Image/video/PDF previews are capability tests, not just file-presence tests; terminal graphics support remains separate.",
-        "This package does not install Zellij, SSH, Windows Terminal, Yazi plugins or system packages.",
+        "Chafa image preview is text and works without a terminal image protocol. Native video/PDF image previews still depend on terminal graphics support.",
+        "This package does not install Zellij, SSH, Windows Terminal, Git or system packages.",
         "Pending/unavailable helpers are capability limitations, not hidden runtime downloads.",
         "",
-        "## Upstream GitHub links",
+        "## Upstream links",
         "",
         f"- Yazi: https://github.com/{manifest['yazi']['repo']}/releases/tag/{manifest['yazi']['tag']}",
     ]
+    if manifest["platform"] == "windows-x86_64" and manifest["helpers"].get("tree", {}).get("status") == "included":
+        boundary = lines.index("## Boundary")
+        lines[boundary:boundary] = [
+            "## GNU/MSYS commands on Windows",
+            "",
+            "PortableGit 2.56.0 supplies `ls`, `cat`, `less`, `head`, `tail`, `wc`, `du`, `stat`, `grep`, `sed`, `awk`, `cut`, `tr`, `uniq`, `xargs`, `diff`, `cygpath`, `realpath`, `sha256sum`, `find`, and `sort`. MSYS2 supplies `tree.exe`.",
+            "After adding this `yazi_bin` directory first on PATH, `find.exe`, `sort.exe`, and `tree.exe` select the bundled GNU/MSYS tools instead of Windows commands. Check with `Get-Command tree.exe,find.exe,sort.exe`.",
+            "PowerShell also has aliases for `ls`, `cat`, and `sort`; spell `ls.exe`, `cat.exe`, and `sort.exe` to select the bundled programs.",
+            "Use `tree.exe -a -L 2 .` and `find.exe . -type f -name '*.md'`. MSYS2 tree compatibility with the PortableGit runtime still requires the separate Windows acceptance test.",
+            "",
+        ]
     for name, entry in manifest["helpers"].items():
         if entry.get("repo") and entry.get("tag"):
             link = f"https://github.com/{entry['repo']}/releases/tag/{entry['tag']}"
@@ -922,6 +1075,8 @@ def package_readme(manifest: dict[str, Any]) -> str:
             link = entry.get("url")
         if link:
             lines.append(f"- {name}: {link}")
+    for name, entry in manifest.get("plugins", {}).items():
+        lines.append(f"- {name}: {entry['url']}")
     if unavailable:
         lines.extend(["", "Not included in this package:", "", *unavailable])
     return "\n".join(lines) + "\n"
@@ -1002,13 +1157,17 @@ def verify_archive(archive: Path) -> None:
         if not isinstance(config, dict) or config.get("override_env") != "YAZI_CONFIG_HOME":
             raise PackageError("package config metadata is missing")
         config_files = config.get("files")
-        if config_files != ["config/yazi.toml", "config/README.md"]:
+        if not isinstance(config_files, list) or not {"config/yazi.toml", "config/README.md"} <= set(config_files):
             raise PackageError("package config file list is incorrect")
         for relative in config_files:
             path = root / safe_member_name(relative)
             if not path.is_file():
                 raise PackageError(f"missing package config file: {relative}")
         config_text = (root / "config" / "yazi.toml").read_text(encoding="utf-8")
+        try:
+            tomllib.loads(config_text)
+        except tomllib.TOMLDecodeError as exc:
+            raise PackageError(f"invalid package yazi.toml: {exc}") from exc
         if "[preview]" not in config_text or "wrap = \"yes\"" not in config_text:
             raise PackageError("package config is missing preview defaults")
         if "bat" in manifest.get("helpers", {}) and manifest["helpers"]["bat"].get("status") == "included":
@@ -1017,6 +1176,16 @@ def verify_archive(archive: Path) -> None:
         if "glow" in manifest.get("helpers", {}) and manifest["helpers"]["glow"].get("status") == "included":
             if "md-glow" not in config_text:
                 raise PackageError("package config is missing the glow Markdown opener")
+        plugins = manifest.get("plugins", {})
+        for name, plugin in plugins.items():
+            for relative in plugin.get("files", []):
+                if relative not in config_files or not (root / safe_member_name(relative)).is_file():
+                    raise PackageError(f"missing bundled plugin file: {relative}")
+        if plugins and not (root / "config/package.toml").is_file():
+            raise PackageError("bundled plugins are missing config/package.toml")
+        if "piper" in plugins and "chafa" in manifest.get("helpers", {}):
+            if 'run = \'piper -- chafa' not in config_text:
+                raise PackageError("bundled Chafa plugin has no image preview rule")
         for line in (root / "SHA256SUMS").read_text(encoding="utf-8").splitlines():
             digest, relative = line.split("  ", 1)
             path = root / safe_member_name(relative)

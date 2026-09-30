@@ -154,6 +154,10 @@ swap 仍然 active。swap 只服務 build host，不可打包進 runtime archive
 
 ## 尚未完成的驗收
 
+- 2026-09-30 單一 plugin bundle 已把固定 revision 的 plugin、DuckDB、lazygit 與 Windows `sh.exe`/`tar.exe` 放進各平台 `full` archive；缺少 `rich-cli` 時，`rich-preview.yazi` 原始碼會退回 Yazi 的 `code` preview，仍待互動驗證。
+- 新產物的本機 checksum/manifest/config 驗證與 19 項靜態測試通過；最後 Linux archive 傳到 `surfer` 兩次都在 `scp` 階段斷線，尚未對該版做遠端 runtime 驗收。前一個 build 的 Linux CLI 驗收曾通過，不能代替最後產物的測試。
+- Windows PowerShell 腳本已檢查 syntax；實際 Windows Terminal、Zellij、圖片/表格/notebook 預覽仍須在 Windows x86_64 主機測試。
+
 - Linux x86_64 official bundle 的所有 helper 實際 preview 功能與 `surfer` acceptance。
 - Windows Yazi package。
 - Windows Terminal → SSH → Linux Zellij → Linux Yazi 的完整 C1 矩陣。

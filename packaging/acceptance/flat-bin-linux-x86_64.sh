@@ -16,7 +16,7 @@ cleanup_remote() {
 }
 trap cleanup_remote EXIT
 
-scp "$ARCHIVE" "$REMOTE_HOST:$REMOTE_ARCHIVE"
+scp -o ServerAliveInterval=15 -o ServerAliveCountMax=8 "$ARCHIVE" "$REMOTE_HOST:$REMOTE_ARCHIVE"
 ssh "$REMOTE_HOST" "REMOTE_ARCHIVE='$REMOTE_ARCHIVE' bash -s" <<'REMOTE_SCRIPT'
 set -euo pipefail
 
@@ -43,6 +43,10 @@ export LD_LIBRARY_PATH="$pkg/data/file/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 printf '%s\n' '# Yazi flat-bin acceptance' '' 'CJK 測試 / emoji ✅' > "$work/README.md"
 printf '%s\n' '{"ok": true}' > "$work/test.json"
 printf '%s' 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=' | base64 -d > "$work/fixture.png"
+printf '%s\n' 'name,value' '測試,42' > "$work/fixture.csv"
+mkdir -p "$work/archive-tree/nested"
+printf '%s\n' 'fixture' > "$work/archive-tree/nested/item.txt"
+tar -czf "$work/fixture.tgz" -C "$work/archive-tree" nested
 
 "$pkg/yazi" --version
 "$pkg/ya" --version
@@ -54,16 +58,23 @@ printf '%s' 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQU
 "$pkg/resvg" --version
 "$pkg/chafa" --version
 "$pkg/chafa" "$work/fixture.png" >/dev/null
+"$pkg/chafa" --format=symbols --animate=off --size=20x8 "$work/fixture.png" >/dev/null
+sh -c 'tar -tzf "$1"' sh "$work/fixture.tgz" | grep -Fq 'nested/item.txt'
+"$pkg/duckdb" -c "SELECT count(*) FROM read_csv_auto('$work/fixture.csv')" | grep -Fq '1'
 "$pkg/rg" --version | head -n 1
 "$pkg/fd" --version | head -n 1
 "$pkg/fzf" --version
 "$pkg/zoxide" --version
 "$pkg/ffmpeg" -version | head -n 1
 "$pkg/ffprobe" -version | head -n 1
+"$pkg/duckdb" --version
+"$pkg/lazygit" --version
 "$pkg/file" --version | head -n 1
 "$pkg/file" "$work/test.json"
+tar --version | head -n 1
 [[ -x "$pkg/yazi.real" && -x "$pkg/ya.real" && -x "$pkg/file.real" ]]
-[[ -f "$pkg/config/yazi.toml" && -f "$pkg/config/README.md" && -f "$pkg/FILE-RUNTIME-README.md" ]]
+[[ -f "$pkg/config/yazi.toml" && -f "$pkg/config/README.md" && -f "$pkg/config/keymap.toml" && -f "$pkg/config/init.lua" && -f "$pkg/config/package.toml" && -f "$pkg/FILE-RUNTIME-README.md" ]]
+[[ -f "$pkg/config/plugins/piper.yazi/main.lua" && -f "$pkg/config/plugins/duckdb.yazi/main.lua" && -f "$pkg/config/plugins/rich-preview.yazi/main.lua" ]]
 grep -Fq '[preview]' "$pkg/config/yazi.toml"
 grep -Fq 'YAZI_CONFIG_HOME' "$pkg/yazi"
 grep -Fq 'md-bat' "$pkg/config/yazi.toml"

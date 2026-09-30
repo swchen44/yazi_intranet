@@ -5,6 +5,8 @@
 /dist/yazi-intranet-*
 /dist/official/*.tar.gz
 /dist/official/*.zip
+/dist/plugin-full/*.tar.gz
+/dist/plugin-full/*.zip
 
 # Local build/test output.
 __pycache__/

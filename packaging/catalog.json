@@ -1,6 +1,16 @@
 {
   "catalog_version": 1,
   "yazi_version": "v26.9.1",
+  "plugins": [
+    {"name": "piper", "use": "yazi-rs/plugins:piper", "rev": "f703392", "hash": "d1e0499cae5f3aeb628c267616d4b682", "url": "https://codeload.github.com/yazi-rs/plugins/zip/f703392", "sha256": "39fe084ec2145f88452db784f0f08b3d90addf1b2b78ef87f03225da591519b7", "source_subdir": "piper.yazi"},
+    {"name": "open-with-cmd", "use": "Ape/open-with-cmd", "rev": "56705e2", "hash": "7c84fff414a652c86c44523dbb08026f", "url": "https://codeload.github.com/Ape/open-with-cmd.yazi/zip/56705e2", "sha256": "55a9617e330039ee35522f6af583d699b7eb42cfdd0ca036a4af7e4a9a92fad3", "source_subdir": "."},
+    {"name": "duckdb", "use": "wylie102/duckdb", "rev": "3f8c863", "hash": "87b9233a74325e95011670ed20bbd0d4", "url": "https://codeload.github.com/wylie102/duckdb.yazi/zip/3f8c863", "sha256": "005db6ea05189062b5d4ddcad3546b8f40acf16434e3c5115bdc450adcc00918", "source_subdir": "."},
+    {"name": "preview-git", "use": "AminurAlam/yazi-plugins:preview-git", "rev": "9997d5b", "hash": "ba369f2f02be9e932cf7882c113d6844", "url": "https://codeload.github.com/AminurAlam/yazi-plugins/zip/9997d5b", "sha256": "a566ac09a78ee9d2ec13235f2bfb44159208e4ec78d0eaf469000500d5d1bc56", "source_subdir": "preview-git.yazi"},
+    {"name": "rich-preview", "use": "AnirudhG07/rich-preview", "rev": "02597c4", "hash": "33982a6e2d6df07619a2a0fc163a0950", "url": "https://codeload.github.com/AnirudhG07/rich-preview.yazi/zip/02597c4", "sha256": "3da34bd72270c1c230fb234766096ce06130ab049edda29910fe3f08d82e5c16", "source_subdir": "."},
+    {"name": "git", "use": "yazi-rs/plugins:git", "rev": "f703392", "hash": "347cc6b190eb0c2fd60513cc7ae37412", "url": "https://codeload.github.com/yazi-rs/plugins/zip/f703392", "sha256": "39fe084ec2145f88452db784f0f08b3d90addf1b2b78ef87f03225da591519b7", "source_subdir": "git.yazi"},
+    {"name": "lazygit", "use": "Lil-Dank/lazygit", "rev": "e73fd74", "hash": "6ea5f37c7f219671ec504cb8311f889d", "url": "https://codeload.github.com/Lil-Dank/lazygit.yazi/zip/e73fd74", "sha256": "4d5b633b91f8a6a66cf4d11a27d8a78c2857af6631dcfc6735d3144197e153c4", "source_subdir": "."},
+    {"name": "custom-shell", "use": "AnirudhG07/custom-shell", "rev": "6f68404", "hash": "32558ab53db6009fb2b0c131c437a139", "url": "https://codeload.github.com/AnirudhG07/custom-shell.yazi/zip/6f68404", "sha256": "a8c3d6c8a587fd28029f526b2b684a6b082b2b86407ee75a7f8531ad1d70d4c6", "source_subdir": "."}
+  ],
   "helper_matrix": {
     "file": {
       "optional": false,
@@ -176,6 +186,33 @@
       "dependencies": {"linux": ["package-local bat musl binary"], "windows": ["package-local bat.exe", "Windows VC runtime must be verified on acceptance host"]},
       "linux": {"bundle_status": "included", "runtime_test": "passed", "test_command": "bat --version; bat --paging=never README.md"},
       "windows": {"bundle_status": "included", "runtime_test": "pending", "test_command": "bat.exe --version; bat.exe --paging=never README.md"}
+    },
+    "duckdb": {
+      "optional": true,
+      "role": "tabular-preview",
+      "capability": "Render CSV, TSV and Parquet through duckdb.yazi.",
+      "overlap": "Yazi can still show raw CSV/TSV text without this helper; Parquet tabular preview needs DuckDB.",
+      "dependencies": {"linux": ["package-local DuckDB CLI", "host glibc baseline"], "windows": ["package-local DuckDB CLI", "Microsoft Visual C++ Redistributable may be required"]},
+      "linux": {"bundle_status": "included", "runtime_test": "pending", "test_command": "duckdb --version"},
+      "windows": {"bundle_status": "included", "runtime_test": "pending", "test_command": "duckdb.exe --version"}
+    },
+    "lazygit": {
+      "optional": true,
+      "role": "git-tui",
+      "capability": "Open Git repositories through the G-i shortcut.",
+      "overlap": "Git status fetcher works without lazygit; lazygit provides an interactive UI.",
+      "dependencies": {"linux": ["package-local lazygit", "host git"], "windows": ["package-local lazygit.exe", "host git.exe"]},
+      "linux": {"bundle_status": "included", "runtime_test": "pending", "test_command": "lazygit --version"},
+      "windows": {"bundle_status": "included", "runtime_test": "pending", "test_command": "lazygit.exe --version"}
+    },
+    "tree": {
+      "optional": true,
+      "role": "directory-tree",
+      "capability": "GNU-style directory tree listing using the MSYS path conventions.",
+      "overlap": "Windows also has tree.exe with different options; this bundle puts the MSYS2 binary first on PATH.",
+      "dependencies": {"linux": ["host tree optional, not bundled"], "windows": ["package-local tree.exe", "PortableGit msys-2.0.dll compatibility pending Windows test"]},
+      "linux": {"bundle_status": "not-in-scope", "runtime_test": "not-applicable", "test_command": "not bundled"},
+      "windows": {"bundle_status": "included", "runtime_test": "pending", "test_command": "tree.exe --version; tree.exe -a -L 2 fixture"}
     }
   },
   "targets": {
@@ -207,6 +244,18 @@
           "asset": "bat-v0.26.1-x86_64-unknown-linux-musl.tar.gz",
           "sha256": "0dcd8ac79732c0d5b136f11f4ee00e581440e16a44eab5b3105b611bbf2cf191",
           "extract": [{"match": "*/bat", "destination": "bin/bat"}]
+        },
+        {
+          "name": "duckdb", "source_kind": "github_release", "repo": "duckdb/duckdb", "tag": "v1.5.5",
+          "asset": "duckdb_cli-linux-amd64.zip", "sha256": "08c0ca117111fcede14239d0093792352befdc174218c344d232c13279643d05",
+          "extract": [{"match": "duckdb", "destination": "bin/duckdb"}],
+          "license_url": "https://github.com/duckdb/duckdb/blob/main/LICENSE"
+        },
+        {
+          "name": "lazygit", "source_kind": "github_release", "repo": "jesseduffield/lazygit", "tag": "v0.65.1",
+          "asset": "lazygit_0.65.1_linux_x86_64.tar.gz", "sha256": "02beacbcda0fa342e50ae3480ba8147307353af3fb28e1d5f790e02329c201a6",
+          "extract": [{"match": "lazygit", "destination": "bin/lazygit"}],
+          "license_url": "https://github.com/jesseduffield/lazygit/blob/master/LICENSE"
         },
         {
           "name": "7zz",
@@ -358,6 +407,19 @@
           "runtime_note": "Validate MSVC runtime on the Windows acceptance host."
         },
         {
+          "name": "duckdb", "source_kind": "github_release", "repo": "duckdb/duckdb", "tag": "v1.5.5",
+          "asset": "duckdb_cli-windows-amd64.zip", "sha256": "e1428b7114a841626b5054723731cbf45c6df91b42ae1a6c355f88fad1f6dc4c",
+          "extract": [{"match": "duckdb.exe", "destination": "bin/duckdb.exe"}],
+          "runtime_note": "Validate Microsoft Visual C++ Redistributable on the Windows acceptance host.",
+          "license_url": "https://github.com/duckdb/duckdb/blob/main/LICENSE"
+        },
+        {
+          "name": "lazygit", "source_kind": "github_release", "repo": "jesseduffield/lazygit", "tag": "v0.65.1",
+          "asset": "lazygit_0.65.1_windows_x86_64.zip", "sha256": "bed669be29204932560836a58dc6519ba43c10ea7dc7df63af8a1d96424e191d",
+          "extract": [{"match": "lazygit.exe", "destination": "bin/lazygit.exe"}],
+          "license_url": "https://github.com/jesseduffield/lazygit/blob/master/LICENSE"
+        },
+        {
           "name": "7zz",
           "source_kind": "direct",
           "version": "26.03",
@@ -476,15 +538,50 @@
           "license_url": "https://github.com/ImageMagick/ImageMagick/blob/main/LICENSE"
         },
         {
+          "name": "tree",
+          "source_kind": "direct",
+          "provider": "MSYS2",
+          "version": "2.3.2-1",
+          "url": "https://mirror.msys2.org/msys/x86_64/tree-2.3.2-1-x86_64.pkg.tar.zst",
+          "sha256": "edc3011c0f0d6e42f0c5fb2769990c80318289148e720b142fd8884aa893f333",
+          "extractor": "tar.zst",
+          "extract": [{"match": "usr/bin/tree.exe", "destination": "bin/tree.exe"}],
+          "runtime_note": "Requires Windows compatibility test with bundled Git for Windows MSYS runtime.",
+          "license_url": "https://gitlab.com/OldManProgrammer/unix-tree/-/blob/master/LICENSE"
+        },
+        {
           "name": "file",
           "source_kind": "github_release",
           "repo": "git-for-windows/git",
-          "tag": "v2.55.0.windows.5",
-          "asset": "PortableGit-2.55.0.5-64-bit.7z.exe",
-          "sha256": "5aa8a20f6e9abb2c755f0e73c91c687701a46b309ad84a0ca6509380fa4ae290",
+          "tag": "v2.56.0.windows.1",
+          "asset": "PortableGit-2.56.0-64-bit.7z.exe",
+          "sha256": "eceb5e061aa90df2f69ddd3e90f0030e1b8037a7829934bc40e4be1caa1accc1",
           "extractor": "7zz",
           "extract": [
             {"match": "*/usr/bin/file.exe", "destination": "runtime/bin/file.exe"},
+            {"match": "*/usr/bin/sh.exe", "destination": "runtime/bin/sh.exe"},
+            {"match": "*/usr/bin/tar.exe", "destination": "runtime/bin/tar.exe"},
+            {"match": "*/usr/bin/ls.exe", "destination": "runtime/bin/ls.exe"},
+            {"match": "*/usr/bin/cat.exe", "destination": "runtime/bin/cat.exe"},
+            {"match": "*/usr/bin/less.exe", "destination": "runtime/bin/less.exe"},
+            {"match": "*/usr/bin/head.exe", "destination": "runtime/bin/head.exe"},
+            {"match": "*/usr/bin/tail.exe", "destination": "runtime/bin/tail.exe"},
+            {"match": "*/usr/bin/wc.exe", "destination": "runtime/bin/wc.exe"},
+            {"match": "*/usr/bin/du.exe", "destination": "runtime/bin/du.exe"},
+            {"match": "*/usr/bin/stat.exe", "destination": "runtime/bin/stat.exe"},
+            {"match": "*/usr/bin/grep.exe", "destination": "runtime/bin/grep.exe"},
+            {"match": "*/usr/bin/sed.exe", "destination": "runtime/bin/sed.exe"},
+            {"match": "*/usr/bin/awk.exe", "destination": "runtime/bin/awk.exe"},
+            {"match": "*/usr/bin/cut.exe", "destination": "runtime/bin/cut.exe"},
+            {"match": "*/usr/bin/tr.exe", "destination": "runtime/bin/tr.exe"},
+            {"match": "*/usr/bin/uniq.exe", "destination": "runtime/bin/uniq.exe"},
+            {"match": "*/usr/bin/xargs.exe", "destination": "runtime/bin/xargs.exe"},
+            {"match": "*/usr/bin/diff.exe", "destination": "runtime/bin/diff.exe"},
+            {"match": "*/usr/bin/cygpath.exe", "destination": "runtime/bin/cygpath.exe"},
+            {"match": "*/usr/bin/realpath.exe", "destination": "runtime/bin/realpath.exe"},
+            {"match": "*/usr/bin/sha256sum.exe", "destination": "runtime/bin/sha256sum.exe"},
+            {"match": "*/usr/bin/find.exe", "destination": "runtime/bin/find.exe"},
+            {"match": "*/usr/bin/sort.exe", "destination": "runtime/bin/sort.exe"},
             {"match": "*/usr/share/misc/magic.mgc", "destination": "runtime/share/misc/magic.mgc"},
             {"match": "*/usr/bin/*.dll", "destination_dir": "runtime/bin"},
             {"match": "*/usr/share/licenses/file/*", "destination_dir": "licenses/file"}

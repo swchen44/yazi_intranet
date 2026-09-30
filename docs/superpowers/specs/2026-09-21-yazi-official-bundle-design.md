@@ -151,6 +151,10 @@ Linux 使用 `glow` 官方 Linux x86_64 archive 與 `bat` 官方 musl archive。
 
 ## Plugin policy
 
+2026-09-30 更新：此處記錄的是第一版政策。現在的 `full` bundle 改為同一 archive
+交付固定 revision 的 plugins、`config/package.toml` 與對應 helper；詳見
+[single bundle design](2026-09-30-yazi-single-bundle-plugins-design.md)。
+
 官方 Yazi archive 不包含第三方 `ya pkg` plugins。第一版 package 不在 runtime 連線安裝 plugins。若日後要提供 plugins，staging machine 必須先下載固定 revision、保存 `package.toml` lock、hash 與 license，再作為獨立 config bundle 交付。
 
 ## Research sources

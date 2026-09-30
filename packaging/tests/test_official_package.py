@@ -5,6 +5,9 @@ from __future__ import annotations
 
 import io
 import json
+import shutil
+import subprocess
+import tarfile
 import tempfile
 import unittest
 import zipfile
@@ -19,6 +22,17 @@ import package_official as packager  # noqa: E402
 
 
 class CatalogTests(unittest.TestCase):
+    def test_full_bundle_catalog_has_pinned_plugin_sources_and_new_helpers(self) -> None:
+        catalog = packager.load_catalog(PACKAGING / "catalog.json")
+        self.assertIn("piper", {item["name"] for item in catalog["plugins"]})
+        self.assertIn("rich-preview", {item["name"] for item in catalog["plugins"]})
+        for item in catalog["plugins"]:
+            self.assertRegex(item["sha256"], r"^[0-9a-f]{64}$")
+            self.assertIn("rev", item)
+        for target in catalog["targets"].values():
+            names = {item["name"] for item in target["helpers"]}
+            self.assertTrue({"duckdb", "lazygit"} <= names)
+
     def test_only_supported_targets_are_accepted(self) -> None:
         catalog = packager.load_catalog(PACKAGING / "catalog.json")
         self.assertEqual(
@@ -49,6 +63,8 @@ class CatalogTests(unittest.TestCase):
             "magick",
             "glow",
             "bat",
+            "duckdb",
+            "lazygit",
         }
         catalog = packager.load_catalog(PACKAGING / "catalog.json")
         matrix = catalog["helper_matrix"]
@@ -57,7 +73,8 @@ class CatalogTests(unittest.TestCase):
                 helper["name"]: helper
                 for helper in packager.target_config(catalog, target_name)["helpers"]
             }
-            self.assertEqual(set(helpers), expected | {"file"})
+            platform_specific = {"tree"} if target_name == "windows-x86_64" else set()
+            self.assertEqual(set(helpers), expected | {"file"} | platform_specific)
             for helper in helpers.values():
                 profile = matrix[helper["name"]]
                 self.assertIn("capability", profile)
@@ -75,8 +92,78 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual(windows_chafa["source_kind"], "direct")
         self.assertEqual(matrix["pdftoppm"]["component"], "Poppler")
 
+    def test_windows_portablegit_tools_and_tree_are_pinned(self) -> None:
+        catalog = packager.load_catalog(PACKAGING / "catalog.json")
+        windows = packager.target_config(catalog, "windows-x86_64")
+        helpers = {item["name"]: item for item in windows["helpers"]}
+        portable = helpers["file"]
+        self.assertEqual(portable["tag"], "v2.56.0.windows.1")
+        self.assertEqual(portable["asset"], "PortableGit-2.56.0-64-bit.7z.exe")
+        expected = {"ls", "cat", "less", "head", "tail", "wc", "du", "stat", "grep", "sed", "awk", "cut", "tr", "uniq", "xargs", "diff", "cygpath", "realpath", "sha256sum", "find", "sort"}
+        destinations = {rule.get("destination") for rule in portable["extract"]}
+        self.assertTrue({f"runtime/bin/{name}.exe" for name in expected} <= destinations)
+        self.assertEqual(helpers["tree"]["extractor"], "tar.zst")
+        self.assertEqual(helpers["tree"]["extract"][0]["destination"], "bin/tree.exe")
+
 
 class StagingTests(unittest.TestCase):
+    @unittest.skipUnless(shutil.which("7zz") and shutil.which("zstd"), "7zz and zstd required")
+    def test_zstd_pacman_archive_extracts_only_tree(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            tar_path = root / "tree.pkg.tar"
+            with tarfile.open(tar_path, "w") as archive:
+                for name, data in (("usr/bin/tree.exe", b"tree-binary"), ("usr/bin/other.exe", b"other")):
+                    member = tarfile.TarInfo(name)
+                    member.size = len(data)
+                    archive.addfile(member, io.BytesIO(data))
+            compressed = root / "tree.pkg.tar.zst"
+            with compressed.open("wb") as output:
+                subprocess.run(["zstd", "-q", "-c", str(tar_path)], stdout=output, check=True)
+            output_dir = root / "stage"
+            files = packager.extract_asset(compressed, {"extractor": "tar.zst", "extract": [{"match": "usr/bin/tree.exe", "destination": "bin/tree.exe"}]}, output_dir, set(), layout="flat-bin")
+            self.assertEqual(files, ["tree.exe"])
+            self.assertEqual((output_dir / "tree.exe").read_bytes(), b"tree-binary")
+            self.assertFalse((output_dir / "other.exe").exists())
+
+    def test_plugin_archive_extracts_only_selected_plugin(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            archive = root / "plugins.zip"
+            with zipfile.ZipFile(archive, "w") as output:
+                output.writestr("plugins-abc/piper.yazi/main.lua", "return {}")
+                output.writestr("plugins-abc/piper.yazi/LICENSE", "MIT")
+                output.writestr("plugins-abc/git.yazi/main.lua", "return {git=true}")
+            files = packager.extract_plugin_archive(archive, root, "piper", "piper.yazi")
+            self.assertEqual(sorted(files), ["config/plugins/piper.yazi/LICENSE", "config/plugins/piper.yazi/main.lua"])
+            self.assertFalse((root / "config/plugins/git.yazi").exists())
+
+    def test_full_package_config_references_only_staged_preview_plugins(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            stage = Path(temp)
+            packager.write_package_config(
+                stage,
+                windows=False,
+                helpers={"bat", "glow", "chafa", "duckdb", "lazygit", "ffmpeg"},
+                plugins={"piper", "duckdb", "rich-preview", "git", "preview-git", "lazygit", "open-with-cmd"},
+            )
+            config = (stage / "config/yazi.toml").read_text()
+            keymap = (stage / "config/keymap.toml").read_text()
+            self.assertIn('run = \'piper -- tar -tzf "$1"\'', config)
+            self.assertIn('run = \'piper -- chafa', config)
+            self.assertIn('run = "duckdb"', config)
+            self.assertIn('run = "rich-preview"', config)
+            self.assertIn('on = "o"', keymap)
+            self.assertIn('plugin lazygit', keymap)
+
+    def test_config_without_rich_plugin_keeps_builtin_ipynb_preview(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            stage = Path(temp)
+            packager.write_package_config(stage, windows=True, helpers=set(), plugins=set())
+            config = (stage / "config/yazi.toml").read_text()
+            self.assertNotIn("rich-preview", config)
+            self.assertNotIn('run = "duckdb"', config)
+
     def test_flat_destination_maps_runtime_paths_and_rejects_collisions(self) -> None:
         self.assertEqual(packager.flat_destination("bin/yazi.real"), "yazi.real")
         self.assertEqual(packager.flat_destination("bin/ffmpeg.exe"), "ffmpeg.exe")
@@ -157,7 +244,7 @@ class StagingTests(unittest.TestCase):
             self.assertIn("md-bat", config)
             self.assertIn("md-glow", config)
             self.assertIn("[[open.prepend_rules]]", config)
-            self.assertIn('use = [ "edit", "md-bat", "md-glow" ]', config)
+            self.assertIn('use = [ "edit", "md-bat", "md-glow", "md-vscode", "md-chrome", "reveal" ]', config)
 
             windows_stage = Path(temp) / "windows"
             packager.write_package_config(windows_stage, windows=True, helpers={"bat", "glow"})

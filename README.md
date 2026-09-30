@@ -1,10 +1,15 @@
 # Yazi intranet bundle
 
+單一 `full` plugin 包產生於 `dist/plugin-full/`，Linux/Windows 都採 `yazi_bin/`
+flat layout。公開測試版放在 [GitHub prerelease](https://github.com/swchen44/yazi_intranet/releases/tag/yazi-v26.9.1-intranet-2026-10-01)。
+原 `dist/official/` 舊包保留供比對；新的 Windows 互動驗收仍需在另一台 Windows 主機完成。
+
 ## Why
 
 公司內網的 Linux、Windows 主機不能在執行時依賴外網下載 Yazi dependencies。這個 project
 把 Yazi 官方 release binary 與已固定版本、SHA-256、來源與 license 的 helper binaries
-組成可攜式 bundle；使用者解壓後即可執行，不需要 Rust、Cargo、Git、Scoop、apt 或網路。
+組成可攜式 bundle；使用者解壓後即可執行 Yazi，不需要 Rust、Cargo、Scoop、apt 或網路。
+Git 相關 plugins 仍使用主機已安裝的 Git。
 
 Yazi 官方將 `file(1)` 列為必要依賴，並把 FFmpeg、7-Zip、jq、Poppler、fd、rg、fzf、
 zoxide、resvg、ImageMagick 列為功能性 optional dependencies。[Yazi installation docs](https://yazi-rs.github.io/docs/installation/)
@@ -16,9 +21,10 @@ zoxide、resvg、ImageMagick 列為功能性 optional dependencies。[Yazi insta
 - Linux x86_64：`x86_64-unknown-linux-musl`
 - Windows x86_64：`x86_64-pc-windows-msvc`
 
-Linux ARM64 不在目前交付範圍。Zellij、SSH、Windows Terminal、shell、Claude Code、
-Codex、Git 與 Yazi plugins 都是外部環境，不放進 Yazi bundle；Zellij 仍由獨立 project
-管理。
+Linux ARM64 不在目前交付範圍。`full` bundle 包含固定 revision 的 Yazi plugins；
+Zellij、SSH、Windows Terminal、Claude Code、Codex 與 Git 由主機或獨立 project 提供。
+Windows 版從 PortableGit 2.56.0 取出 `sh.exe` 與常用 MSYS 指令，讓 `piper.yazi`
+不必依賴使用者另外設定 Git Bash 的 PATH；`tree.exe` 則取自固定版本的 MSYS2 套件。
 
 每個 target 可選 `standard` 或 `flat-bin` layout。`standard` 保留 `bin/`、`runtime/` 的
 既有結構；`flat-bin` 解壓後固定得到 `yazi_bin/`，所有 executable、launcher 與主要說明
@@ -41,11 +47,49 @@ Codex、Git 與 Yazi plugins 都是外部環境，不放進 Yazi bundle；Zellij
 | `zoxide` | historical directory jump；文件化整合需要 `fzf` | 已納入，已測 | 已納入，待 Windows 實測 |
 | `magick` | font、HEIC、JPEG XL/image conversion | pending：surfer 缺 `libharfbuzz.so.0` | 官方 portable Q8，待 Windows 實測 |
 | `glow` / `bat` | 額外 Markdown/text tools，不是 Yazi 必要依賴 | 已納入，已測 | 已納入，待 Windows 實測 |
+| `duckdb` | CSV/TSV/Parquet 表格預覽 | full bundle 新增，待 Linux 實測 | full bundle 新增，待 Windows 實測及 VC runtime 檢查 |
+| `lazygit` | `g` 再 `i` 開啟 Git TUI | full bundle 新增，待 Linux 實測 | full bundle 新增，待 Windows 實測 |
+| `piper.yazi` + `sh` + `tar` | 圖片、Markdown、`.tgz`/`.tar.gz` 右側文字預覽 | plugin 已固定；Ubuntu 提供 `sh`、`tar` | plugin 與 PortableGit `sh.exe`、`tar.exe` 都在 bundle，待實測 |
+| GNU `tree` 與常用 MSYS 指令 | 目錄樹、文字搜尋/處理、路徑轉換、checksum | 本次未額外打包；Ubuntu 自行提供 | `tree.exe` 來自 MSYS2，其餘來自 PortableGit 2.56.0；待 Windows 實測 |
 
 完整的 capability、相依性、功能重疊與 Linux/Windows runtime test 欄位在
 [`packaging/catalog.json`](packaging/catalog.json)。`pdftoppm` 是目前包進去的 Poppler
 command，不代表已經包含全部 Poppler utilities；若未來需要 `pdfinfo` 等工具，再另增
 明確 inventory。
+
+### Full bundle 的 plugins 與額外軟體
+
+`full` 在同一個 archive 內交付 `config/yazi.toml`、`keymap.toml`、`init.lua`、
+`package.toml` 與 `config/plugins/`。已固定來源 revision、下載 SHA-256 的 plugins：
+`piper`、`open-with-cmd`、`duckdb`、`preview-git`、`rich-preview`、`git`、
+`lazygit`、`custom-shell`。內網執行不會跑 `ya pkg` 或下載 plugin。
+
+| 功能 | Bundle 內 | 仍由主機提供或有限制 |
+| --- | --- | --- |
+| 圖片與 Markdown 右側預覽 | `piper`、`chafa`、`glow`；Windows 另含 `sh.exe` | Linux 需 Ubuntu 內建 `sh` |
+| `.tgz` / `.tar.gz` 右側預覽 | `piper`；Windows 另含 `tar.exe` | Linux 需 Ubuntu 內建 `tar` |
+| CSV/TSV/Parquet | `duckdb.yazi` + DuckDB CLI | Windows 需在實機驗證 VC Runtime |
+| `.ipynb` | `rich-preview.yazi` | 缺 `rich-cli` 時 plugin 退回 Yazi `code` preview；若要格式化畫面，使用者後續可安裝 `rich-cli`/Python |
+| Git 狀態、`.git`、lazygit | plugins + `lazygit` CLI | 主機需有 Git；不用把 Git 打包 |
+| 媒體 metadata | O 選單使用包內 `ffprobe` | 使用者看到的選項是「Show media metadata with FFprobe」；MediaInfo CLI 目前未打包 |
+| VS Code、Chrome、系統預設開啟 | 對應 O 選單規則 | 應用程式、圖形桌面或 X forwarding 由主機提供；純 SSH 沒有圖形桌面時選單仍會顯示，但無法開啟 GUI |
+
+目前安裝於 macOS 的 `mediainfo.yazi` plugin 沒有被啟用為右側 previewer；portable bundle
+保留 Chafa 圖片預覽與 `ffprobe` 手動 metadata 選項。`custom-shell` plugin 已包含，
+但沿用 macOS 決定，不綁定容易與內建輸入功能混淆的 `';`、`':`。
+
+Windows `yazi_bin/` 額外包含 `ls`、`cat`、`less`、`head`、`tail`、`wc`、`du`、
+`stat`、`grep`、`sed`、`awk`、`cut`、`tr`、`uniq`、`xargs`、`diff`、
+`cygpath`、`realpath`、`sha256sum`、`find`、`sort`、`tree` 的 `.exe`。
+其中 `find.exe`、`sort.exe`、`tree.exe` 與 Windows 內建指令同名；把
+`yazi_bin/` 放在 PATH 前面後，輸入這些名稱會優先執行 bundle 版本。
+PowerShell 可用 `Get-Command tree.exe,find.exe,sort.exe` 查看實際路徑。
+PowerShell 的 `ls`、`cat`、`sort` 另有內建 alias；需要這包的 GNU 指令時請寫
+`ls.exe`、`cat.exe`、`sort.exe`。
+GNU `tree` 使用 `tree.exe -a -L 2 .`；GNU `find` 使用
+`find.exe . -type f -name '*.md'`，選項與 Windows 內建的 `/F`、`/A` 不同。
+`tree.exe` 雖取自 MSYS2，和 PortableGit 的 `msys-2.0.dll` 是否完全相容仍待
+Windows 實機驗收；未驗收前不要把它視為已通過的功能。
 
 ## Yazi 使用說明書
 
@@ -55,22 +99,25 @@ command，不代表已經包含全部 Poppler utilities；若未來需要 `pdfin
 
 ### 啟動與 Help
 
+以下以這次交付的 `flat-bin` archive 為準。先進入解壓後的 `yazi_bin/`；
+不需要額外安裝 Python 或 `rich-cli`。
+
 Linux：
 
 ```sh
-./bin/yazi .
-./bin/yazi --help
-./bin/ya --help
-./bin/ya env
+./yazi .
+./yazi --help
+./ya --help
+./ya env
 ```
 
 Windows PowerShell：
 
 ```powershell
-.\bin\yazi.cmd .
-.\bin\yazi.cmd --help
-.\bin\ya.cmd --help
-.\bin\ya.cmd env
+.\yazi.cmd .
+.\yazi.cmd --help
+.\ya.cmd --help
+.\ya.cmd env
 ```
 
 Yazi 執行中可用：
@@ -104,8 +151,9 @@ Yazi 執行中可用：
 | 新增檔案/資料夾 | `a` | 名稱以 `/` 結尾可建立資料夾 |
 | 改名 | `r` | 改名；多選後可批次改名 |
 | 顯示隱藏檔 | `.` | 切換隱藏檔顯示 |
-| 開啟檔案 | `Enter` 或 `o` | 使用預設 opener |
+| 開啟檔案 | `Enter` | 使用預設 opener |
 | Open with | `O` | 顯示所有可用 opener |
+| Open with command | `o` / `Ctrl+O` | 輸入要使用的外部指令；須有對應程式 |
 | 多分頁 | `t` 再按 `t` | 建立目前目錄的新 tab |
 | 切換 tab | `1` 至 `9`、`[`、`]` | 切換或前後移動 tab |
 
@@ -153,28 +201,32 @@ Z             使用 zoxide 尋找歷史目錄
 
 ### Markdown、文字與 Open with
 
-游標停在 Markdown 或文字檔時，右側會直接顯示內建 preview。對 Markdown 可按 `O` 選擇：
+游標停在 Markdown 時，`full` bundle 會由 `piper.yazi` 呼叫 `glow` 顯示右側預覽。
+對 Markdown 可按 `O` 選擇：
 
 | Open with 選項 | 用途 |
 | --- | --- |
 | `edit` | 使用既有 editor 開啟 |
 | `bat` | 顯示 syntax highlighting 的 Markdown/text |
 | `glow` | 在 terminal render Markdown |
+| `VS Code` / `Google Chrome` | 有安裝對應應用程式且可從目前環境啟動時才可使用 |
 
 `Enter` 仍使用第一個 `edit` opener，不會因為 bundle 有 `bat` 或 `glow` 就改變預設行為。
-`bat` 與 `glow` 是外部 viewer，Yazi 內建 preview 不依賴它們。
+`o` 會開啟 OpenWithCmd 指令輸入框；`O` 保留 Yazi 原生的 Open with 選單。
+一般文字仍由 Yazi 內建 preview 處理。若設定了 `YAZI_CONFIG_HOME` 覆寫 bundle 設定，
+上述 plugin 與按鍵不會自動載入。
 
 ### 壓縮檔：預覽、Open with 與解壓縮
 
-選取 `.zip`、`.7z`、`.tar`、`.tar.gz`、`.rar` 等壓縮檔後，Yazi 會用 `7zz` 顯示內容清單。
-目前 v26.9.1 的內建 archive preview 會把路徑畫成縮排的樹狀結構，但提供捲動，不提供
-樹節點折疊/展開按鍵。需要折疊功能時，必須額外安裝相容 plugin 或自訂 previewer；本
-bundle 不會在內網自動下載 plugins。
+選取 `.zip`、`.7z`、`.tar`、`.rar` 等壓縮檔後，Yazi 會用 `7zz` 顯示內容清單。
+`full` bundle 的 `.tgz`、`.tar.gz` 改由 `piper.yazi` 呼叫 `tar -tzf`，可列出某些
+`7zz` 只顯示內層 `.tgz` 名稱的檔案。這個預覽是可捲動的路徑清單；沒有節點折疊鍵。
+Linux 使用 Ubuntu 的 `tar`；Windows 使用 bundle 內的 `tar.exe`、`sh.exe`。
 
 解壓縮最快的方式：
 
 1. 游標移到壓縮檔。
-2. 按 `Enter` 或 `o`，使用預設的 `Extract here`。
+2. 按 `Enter`，使用預設的 `Extract here`。
 3. 需要選擇操作時按 `O`，再選 `Extract here`。
 4. 按 `w` 查看解壓縮 task 的狀態。
 
@@ -209,12 +261,15 @@ project 的實際狀態：
 
 | 類型 | Yazi 使用方式 | Linux x86_64 | Windows x86_64 |
 | --- | --- | --- | --- |
-| PNG/JPEG | 內建 image preview | helper 已有；畫面取決於 terminal protocol | helper 已有；待 Windows 實測 |
+| PNG/JPEG | `piper.yazi` + `chafa` 顯示文字圖片 | plugin/helper 已納入；待 Yazi 互動實測 | plugin/helper 已納入；待 Windows 實測 |
 | SVG | `resvg` preview path | 已納入 | Windows upstream CLI unavailable |
 | HEIC/JXL | `magick` preview path | pending，`surfer` 缺 `libharfbuzz` | 已納入；待 Windows 實測 |
 | 影片 | `ffmpeg`/`ffprobe` 產生 thumbnail/metadata | 已納入；畫面取決於 terminal protocol | 已納入；待 Windows 實測 |
 | PDF | `pdftoppm` 產生頁面圖片 | pending，尚未納入可驗證 runtime | 已納入；待 Windows 實測 |
 | graphics fallback | `chafa` 顯示 ASCII/Unicode 圖片 | 已納入，surfer command smoke 已測 | 已納入；待 Windows 實測 |
+
+圖片右側預覽採用 Chafa 的 Unicode 字元輸出，不需要 Kitty/Sixel protocol。
+這能避開 Zellij 內原生圖片預覽灰畫面的限制；影片與 PDF 的圖片式預覽仍要檢查 terminal graphics。
 
 #### 公司情境一：Windows Terminal → SSH → Linux Zellij → Yazi
 
@@ -229,7 +284,7 @@ Yazi 官方指出 Zellij 的 Kitty protocol 與 Sixel 目前仍有相容性與�
 
 #### 公司情境二：Windows Terminal → Windows Zellij → Yazi
 
-先在 Windows Terminal 直接執行 `bin\yazi.cmd` 作為 control test，再進入 native Zellij
+先在 Windows Terminal 直接執行 `yazi_bin\yazi.cmd` 作為 control test，再進入 native Zellij
 重做相同 fixture。Windows Terminal 需要符合 Yazi 文件列出的 Sixel 支援版本；文字、
 helper command、圖片畫面與 Zellij passthrough 要分開記錄。
 
@@ -281,34 +336,34 @@ wrapper 範例。[Shell wrapper](https://yazi-rs.github.io/docs/quick-start/#she
 
 ## How: 使用者步驟
 
-### Linux x86_64
+### Linux x86_64（目前交付的 flat-bin）
 
 1. 取得對應的 `.tar.gz`、`.sha256` 與 `.manifest.json`。從 GitHub Release 下載後，先在可用的 SHA-256 工具上驗證 checksum。
 2. 解壓完整目錄，不要只複製 `yazi.real`：
 
    ```sh
-   tar -xzf yazi-v26.9.1-x86_64-unknown-linux-musl-full.tar.gz
-   cd yazi-v26.9.1-x86_64-unknown-linux-musl-full
+   tar -xzf yazi-v26.9.1-x86_64-unknown-linux-musl-flat-bin.tar.gz
+   cd yazi_bin
    ```
 
 3. 直接使用 package launcher；launcher 會優先使用 package-local helper：
 
    ```sh
-   ./bin/yazi .
-   ./bin/ya env
-   ./bin/glow README.md
-   ./bin/bat README.md
+   ./yazi .
+   ./ya env
+   ./glow README.md
+   ./bat README.md
    ```
 
-   套件 launcher 會預設載入 `config/yazi.toml`，並在 Markdown 的 `Open with` 選單提供
-   已納入的 `bat`、`glow`。Yazi 原本的內建 `code` previewer 仍負責一般文字與 Markdown
-   preview；`Enter` 不會被改成直接執行外部 viewer。若你已有自己的 Yazi config，可在啟動
+   套件 launcher 會預設載入 `config/yazi.toml` 及打包的 plugins，Markdown 右側由 Glow
+   render；`Open with` 選單提供 `bat`、`glow`、VS Code、Chrome 等選項。`Enter` 仍使用
+   原本的 `edit` opener。若你已有自己的 Yazi config，可在啟動
    前設定 `YAZI_CONFIG_HOME`，launcher 會保留該設定。
 
 4. 若要在目前 shell 暫時加入 PATH：
 
    ```sh
-   export PATH="$PWD/bin:$PWD/runtime/bin:$PATH"
+   export PATH="$PWD:$PATH"
    yazi .
    ```
 
@@ -339,36 +394,33 @@ ya env
 根目錄 executable 會使 `file(1)`、`magic.mgc` 或其他 helper 找不到。launcher 會由自身
 路徑設定 `YAZI_CONFIG_HOME`、`YAZI_FILE_ONE`、`MAGIC` 與 Linux library path。
 
-### Windows x86_64
+### Windows x86_64（目前交付的 flat-bin）
 
 1. 取得 `.zip`、`.sha256` 與 `.manifest.json`，在 PowerShell 驗證 checksum。
 2. 使用 Windows Terminal 解壓完整目錄：
 
    ```powershell
-   Expand-Archive .\yazi-v26.9.1-x86_64-pc-windows-msvc-full.zip .\yazi
-   cd .\yazi\yazi-v26.9.1-x86_64-pc-windows-msvc-full
+   Expand-Archive .\yazi-v26.9.1-x86_64-pc-windows-msvc-flat-bin.zip .\yazi
+   cd .\yazi\yazi_bin
    ```
 
 3. 使用 `.cmd` launcher：
 
    ```powershell
-   .\bin\yazi.cmd .
-   .\bin\ya.cmd env
-   .\bin\glow.exe README.md
-   .\bin\bat.exe README.md
+   .\yazi.cmd .
+   .\ya.cmd env
+   .\glow.exe README.md
+   .\bat.exe README.md
    ```
 
-   launcher 會預設載入 `config\yazi.toml`。Yazi 內建 preview 仍可使用；Markdown 的
-   `Open with` 會列出已納入的 `bat`、`glow`。若已有自己的 config，先設定
+   launcher 會預設載入 `config\yazi.toml`、plugins 與 package-local helpers。若已有自己的 config，先設定
    `$env:YAZI_CONFIG_HOME` 即可覆寫 package 預設值。
 
 4. 若要在目前 PowerShell 暫時加入 PATH：
 
    ```powershell
-   $env:Path = "$PWD\bin;$PWD\runtime\bin;$PWD\runtime\imagemagick;$env:Path"
-   $env:YAZI_FILE_ONE = "$PWD\runtime\bin\file.exe"
-   $env:MAGIC = "$PWD\runtime\share\misc\magic.mgc"
-   .\bin\yazi.cmd .
+   $env:Path = "$PWD;$env:Path"
+   .\yazi.cmd .
    ```
 
 5. Windows Terminal 直接執行是 control test；之後再於獨立安裝的 native Zellij 中執行。
@@ -392,14 +444,13 @@ ya env
 
 ## Boundary
 
-- Runtime 不需要外網；`ya pkg` plugins 不會自動下載，也不在 archive 內。
-- Bundle 不包含 Zellij、SSH、Windows Terminal、Git、shell 或任何公司的認證設定。
+- Runtime 不需要外網；`full` 的 plugins 已在 archive 內，不會執行 `ya pkg`。
+- Bundle 不包含 Zellij、SSH、Windows Terminal、Git 或任何公司的認證設定。Windows bundle 內含 `piper` 所需的 `sh.exe`。
 - 目前不支援 Linux ARM64。
 - `full` 代表 catalog 中有固定 hash 且通過 extraction 的項目，不代表每個平台的每種
   preview 都已通過實機測試。
-- `config/yazi.toml` 只提供 package-safe 的 preview defaults 與可取得的 Markdown
-  opener；不包含 credentials、公司路徑、個人 editor/shell、theme 或 keymap。`bat`、
-  `glow` 缺少時，Yazi 仍可啟動並使用內建 preview。
+- `full` 的 config 含 `keymap.toml`、`init.lua` 與 plugins；不包含 credentials、公司路徑、
+  個人 editor 設定或 theme。GUI opener 仍需對應應用程式與圖形環境。
 - Linux `magick`、Linux Poppler `pdftoppm` 目前 pending；Windows `resvg` 沒有 upstream
   Windows CLI asset。這些狀態會寫入 package `manifest.json` 與 package README。
 - 圖片顯示還受 terminal graphics protocol 影響。Yazi 文件列出 Windows Terminal
@@ -426,18 +477,20 @@ Python script 讀取 pinned catalog，下載 asset、驗證 upstream SHA-256、�
 檔案、產生 launcher、manifest、license pointer、`SHA256SUMS`，最後輸出 deterministic
 archive：
 
+打包機需 Python 3.11+；目標 Linux/Windows 執行 bundle 不需要 Python。
+
 ```sh
 python3 packaging/package_official.py package \
   --version v26.9.1 \
   --target linux-x86_64 \
   --profile full \
-  --output-dir dist/official
+  --output-dir dist/plugin-full
 
 python3 packaging/package_official.py package \
   --version v26.9.1 \
   --target windows-x86_64 \
   --profile full \
-  --output-dir dist/official
+  --output-dir dist/plugin-full
 
 # flat-bin variant. Standard remains the default when --layout is omitted.
 python3 packaging/package_official.py package \
@@ -445,14 +498,14 @@ python3 packaging/package_official.py package \
   --target linux-x86_64 \
   --profile full \
   --layout flat-bin \
-  --output-dir dist/official
+  --output-dir dist/plugin-full
 
 python3 packaging/package_official.py package \
   --version v26.9.1 \
   --target windows-x86_64 \
   --profile full \
   --layout flat-bin \
-  --output-dir dist/official
+  --output-dir dist/plugin-full
 ```
 
 更新版本時，只修改 `packaging/catalog.json` 的 version、URL、asset、SHA-256、license
@@ -466,13 +519,9 @@ python3 packaging/tests/test_official_package.py
 python3 -m py_compile packaging/package_official.py
 python3 -m json.tool packaging/catalog.json >/dev/null
 python3 packaging/package_official.py verify \
-  dist/official/yazi-v26.9.1-x86_64-unknown-linux-musl-full.tar.gz
+  dist/plugin-full/yazi-v26.9.1-x86_64-unknown-linux-musl-flat-bin.tar.gz
 python3 packaging/package_official.py verify \
-  dist/official/yazi-v26.9.1-x86_64-pc-windows-msvc-full.zip
-python3 packaging/package_official.py verify \
-  dist/official/yazi-v26.9.1-x86_64-unknown-linux-musl-flat-bin.tar.gz
-python3 packaging/package_official.py verify \
-  dist/official/yazi-v26.9.1-x86_64-pc-windows-msvc-flat-bin.zip
+  dist/plugin-full/yazi-v26.9.1-x86_64-pc-windows-msvc-flat-bin.zip
 ```
 
 修改 package 行為時，也要驗證 config 產出與 launcher 預設值：
@@ -480,19 +529,15 @@ python3 packaging/package_official.py verify \
 ```sh
 python3 packaging/tests/test_official_package.py
 python3 packaging/package_official.py verify \
-  dist/official/yazi-v26.9.1-x86_64-unknown-linux-musl-full.tar.gz
+  dist/plugin-full/yazi-v26.9.1-x86_64-unknown-linux-musl-flat-bin.tar.gz
 ```
 
 Linux helper acceptance：
 
 ```sh
-ZELLIJ_SSH_HOST=surfer \
-  packaging/acceptance/linux-x86_64.sh \
-  dist/official/yazi-v26.9.1-x86_64-unknown-linux-musl-full.tar.gz
-
 YAZI_SSH_HOST=surfer \
   packaging/acceptance/flat-bin-linux-x86_64.sh \
-  dist/official/yazi-v26.9.1-x86_64-unknown-linux-musl-flat-bin.tar.gz
+  dist/plugin-full/yazi-v26.9.1-x86_64-unknown-linux-musl-flat-bin.tar.gz
 ```
 
 `surfer` 只有一顆 CPU、記憶體小；不要平行 compile 或平行驗證。Windows runtime 要
@@ -502,21 +547,21 @@ YAZI_SSH_HOST=surfer \
 
 ## GitHub Release 與大檔案防範
 
-兩個 archive 目前約 149 MB 與 293 MB。GitHub 對一般 Git object 的單檔限制是 100 MB；
+兩個新 `flat-bin` archive 目前約 186 MB 與 330 MB。GitHub 對一般 Git object 的單檔限制是 100 MB；
 因此 `.tar.gz`、`.zip` 不應 commit 到 repository。GitHub 官方建議大型產物使用 Git LFS
 或放到 repository 外的 object storage；GitHub Releases asset 適合交付「版本化 binary」，
 所以本 project 採以下規則：[GitHub repository limits](https://docs.github.com/en/repositories/creating-and-managing-repositories/repository-limits)
 
 - Git repository 只放 README、docs、`packaging/`、catalog、tests、acceptance scripts、
   checksum/manifest metadata；不放 `yazi/` source checkout，也不放大型 archive。
-- `dist/official/*.tar.gz` 與 `*.zip` 已在 `.gitignore` 防止誤 commit；`.sha256`、
+- `dist/official/` 與 `dist/plugin-full/` 的大型 `.tar.gz`、`.zip` 已在 `.gitignore` 防止誤 commit；`.sha256`、
   `.manifest.json` 可以保留作為 release evidence。
 - 建立 GitHub Release，例如 tag `yazi-v26.9.1`。若交付 standard 與 `flat-bin` 兩種
   layout，就各上傳 Linux/Windows archive、`.sha256` 與 `.manifest.json`；若公司只採用
   flat-bin，則只上傳兩個 `*-flat-bin` archive 及其 sidecars。使用者下載 release asset
   後先驗 hash，再解壓。
 - GitHub 官方目前說明每個 Release asset 必須小於 2 GiB，Release 總大小沒有總量上限；
-  本 project 的 149 MB/293 MB 產物符合這個交付模型。[GitHub releases storage limits](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases)
+  本 project 的 186 MB/330 MB 產物符合這個交付模型。[GitHub releases storage limits](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases)
 - Release asset 不是內網 runtime 的網路依賴；正式交付前要把 release assets 同步到
   公司內網檔案區。內網使用者只需要拿到 archive，不需要 GitHub、Git、Scoop 或 apt。
 - Git LFS 理論上也能存大檔，但對這種每版交付 binary，Release asset 比讓每位使用者
