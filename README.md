@@ -1,7 +1,8 @@
 # Yazi intranet bundle
 
 單一 `full` plugin 包產生於 `dist/plugin-full/`，Linux/Windows 都採 `yazi_bin/`
-flat layout。公開測試版放在 [GitHub prerelease](https://github.com/swchen44/yazi_intranet/releases/tag/yazi-v26.9.1-intranet-2026-10-01)。
+flat layout。Linux 測試版在 [Linux prerelease](https://github.com/swchen44/yazi_intranet/releases/tag/yazi-v26.9.1-intranet-2026-10-01)；
+Windows MediaInfo 版在 [Windows prerelease](https://github.com/swchen44/yazi_intranet/releases/tag/yazi-v26.9.1-intranet-2026-10-01-windows-mediainfo)。
 原 `dist/official/` 舊包保留供比對；新的 Windows 互動驗收仍需在另一台 Windows 主機完成。
 
 ## Why
@@ -38,7 +39,8 @@ Windows 版從 PortableGit 2.56.0 取出 `sh.exe` 與常用 MSYS 指令，讓 `p
 | --- | --- | --- | --- |
 | `file` + `magic.mgc` | MIME/type fallback；必要 | host-vendor，已測 | PortableGit vendor，待 Windows 實測 |
 | `7zz` | archive list/extract | 已納入，已測 | 已納入，待 Windows 實測 |
-| `ffmpeg` + `ffprobe` | video thumbnail/metadata | 已納入，已測 | 已納入，待 Windows 實測 |
+| `ffmpeg` + `ffprobe` | video thumbnail/metadata | 已納入，已測 | 不打包；若 host 有 FFmpeg，Yazi 仍可能使用 |
+| `MediaInfo.exe` | `O` 選單查看本機媒體 metadata，不能產生影片縮圖 | 不打包，沿用 `ffprobe` | 官方 CLI 已納入，待 Windows 實測；不附帶其選用的 `LIBCURL.DLL` |
 | `jq` | JSON pretty preview；Yazi 有 fallback | 已納入，已測 | 已納入，待 Windows 實測 |
 | Poppler `pdftoppm` | PDF page preview | pending：需 ABI audit | 已納入，待 Windows 實測 |
 | `resvg` | SVG preview | 已納入，已測 | upstream release 無 Windows CLI |
@@ -71,11 +73,12 @@ command，不代表已經包含全部 Poppler utilities；若未來需要 `pdfin
 | CSV/TSV/Parquet | `duckdb.yazi` + DuckDB CLI | Windows 需在實機驗證 VC Runtime |
 | `.ipynb` | `rich-preview.yazi` | 缺 `rich-cli` 時 plugin 退回 Yazi `code` preview；若要格式化畫面，使用者後續可安裝 `rich-cli`/Python |
 | Git 狀態、`.git`、lazygit | plugins + `lazygit` CLI | 主機需有 Git；不用把 Git 打包 |
-| 媒體 metadata | O 選單使用包內 `ffprobe` | 使用者看到的選項是「Show media metadata with FFprobe」；MediaInfo CLI 目前未打包 |
+| 媒體 metadata | Linux `O` 選單使用包內 `ffprobe`；Windows 使用包內 `MediaInfo.exe` | Windows 選項為「Show media metadata with MediaInfo」；不提供影片縮圖 helper |
 | VS Code、Chrome、系統預設開啟 | 對應 O 選單規則 | 應用程式、圖形桌面或 X forwarding 由主機提供；純 SSH 沒有圖形桌面時選單仍會顯示，但無法開啟 GUI |
 
 目前安裝於 macOS 的 `mediainfo.yazi` plugin 沒有被啟用為右側 previewer；portable bundle
-保留 Chafa 圖片預覽與 `ffprobe` 手動 metadata 選項。`custom-shell` plugin 已包含，
+保留 Chafa 圖片預覽。Linux 的手動 metadata 使用 `ffprobe`，Windows 改用官方 MediaInfo CLI。
+`custom-shell` plugin 已包含，
 但沿用 macOS 決定，不綁定容易與內建輸入功能混淆的 `';`、`':`。
 
 Windows `yazi_bin/` 額外包含 `ls`、`cat`、`less`、`head`、`tail`、`wc`、`du`、
@@ -94,8 +97,10 @@ Windows 實機驗收；未驗收前不要把它視為已通過的功能。
 ## Yazi 使用說明書
 
 這一節以本 project 的 `full` bundle 為準。解壓後使用 package launcher，Yazi 會自動
-使用 bundle 內的 `file(1)`、`magic.mgc`、`7zz`、`ffmpeg`、`fd`、`rg`、`fzf`、`chafa`
+使用 bundle 內的 `file(1)`、`magic.mgc`、`7zz`、`fd`、`rg`、`fzf`、`chafa`
 與其他已納入的 helpers。
+Linux bundle 另含 `ffmpeg`、`ffprobe`；Windows bundle 改含 `MediaInfo.exe`，
+不含 `ffmpeg.exe`、`ffprobe.exe`。
 
 ### 啟動與 Help
 
@@ -264,12 +269,12 @@ project 的實際狀態：
 | PNG/JPEG | `piper.yazi` + `chafa` 顯示文字圖片 | plugin/helper 已納入；待 Yazi 互動實測 | plugin/helper 已納入；待 Windows 實測 |
 | SVG | `resvg` preview path | 已納入 | Windows upstream CLI unavailable |
 | HEIC/JXL | `magick` preview path | pending，`surfer` 缺 `libharfbuzz` | 已納入；待 Windows 實測 |
-| 影片 | `ffmpeg`/`ffprobe` 產生 thumbnail/metadata | 已納入；畫面取決於 terminal protocol | 已納入；待 Windows 實測 |
+| 影片 | Linux 以 `ffmpeg`/`ffprobe` 產生 thumbnail/metadata；Windows 以 MediaInfo 查看 metadata | 已納入；畫面取決於 terminal protocol | 無包內影片縮圖；`O` 的 MediaInfo 與系統預設開啟待實測 |
 | PDF | `pdftoppm` 產生頁面圖片 | pending，尚未納入可驗證 runtime | 已納入；待 Windows 實測 |
 | graphics fallback | `chafa` 顯示 ASCII/Unicode 圖片 | 已納入，surfer command smoke 已測 | 已納入；待 Windows 實測 |
 
 圖片右側預覽採用 Chafa 的 Unicode 字元輸出，不需要 Kitty/Sixel protocol。
-這能避開 Zellij 內原生圖片預覽灰畫面的限制；影片與 PDF 的圖片式預覽仍要檢查 terminal graphics。
+這能避開 Zellij 內原生圖片預覽灰畫面的限制；Linux 影片與兩平台 PDF 的圖片式預覽仍要檢查 terminal graphics。
 
 #### 公司情境一：Windows Terminal → SSH → Linux Zellij → Yazi
 
@@ -317,8 +322,8 @@ wrapper 範例。[Shell wrapper](https://yazi-rs.github.io/docs/quick-start/#she
 1. 按 `Tab` 檢查 MIME type，確認 `file(1)` 與 `magic.mgc` 是否正確。
 2. 執行 `./bin/ya env` 或 `.\bin\ya.cmd env`，確認 Yazi、helper、terminal adapter 與
    `YAZI_CONFIG_HOME` 路徑。
-3. 執行 helper version command，例如 `7zz i`、`ffmpeg -version`、`pdftoppm -h`、
-   `chafa --version`。
+3. 執行 helper version command，例如 `7zz i`、`pdftoppm -h`、`chafa --version`；
+   Linux 另測 `ffmpeg -version`，Windows 測 `MediaInfo.exe --Version`。
 4. 圖片或影片無畫面時，先離開 Zellij 測試，再判斷是否為 terminal graphics protocol。
 5. PDF 在 Linux package 目前屬於 pending；Windows package 仍需在實際 Windows 主機
    驗證 DLL 與 preview。

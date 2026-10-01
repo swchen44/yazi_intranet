@@ -59,7 +59,7 @@
       "overlap": "Not replaced by ImageMagick; ImageMagick handles images/fonts, while FFmpeg handles video containers/codecs.",
       "dependencies": {
         "linux": ["package-local ffmpeg and ffprobe", "terminal graphics protocol for visible thumbnails"],
-        "windows": ["package-local ffmpeg.exe and ffprobe.exe", "terminal graphics protocol for visible thumbnails"]
+        "windows": ["not bundled; host FFmpeg is optional for video thumbnails"]
       },
       "linux": {
         "bundle_status": "included",
@@ -67,10 +67,22 @@
         "test_command": "ffmpeg -version; ffprobe -version"
       },
       "windows": {
-        "bundle_status": "included",
+        "bundle_status": "not-bundled",
         "runtime_test": "pending",
-        "test_command": "ffmpeg.exe -version; ffprobe.exe -version"
+        "test_command": "Host FFmpeg optional; no package-local FFmpeg"
       }
+    },
+    "mediainfo": {
+      "optional": true,
+      "role": "media-metadata",
+      "capability": "Show image, audio and video metadata from the Open with menu; does not create video thumbnails.",
+      "overlap": "Replaces the bundled FFprobe metadata menu on Windows, not FFmpeg video thumbnails.",
+      "dependencies": {
+        "linux": ["not bundled; Linux retains FFprobe"],
+        "windows": ["package-local MediaInfo.exe for local files; optional network URL libcurl is not bundled from MediaInfo"]
+      },
+      "linux": {"bundle_status": "not-bundled", "runtime_test": "not-applicable", "test_command": ""},
+      "windows": {"bundle_status": "included", "runtime_test": "pending", "test_command": "MediaInfo.exe --Version; MediaInfo.exe fixture.mp4"}
     },
     "jq": {
       "optional": true,
@@ -480,19 +492,17 @@
           "extract": [{"match": "*/zoxide.exe", "destination": "bin/zoxide.exe"}]
         },
         {
-          "name": "ffmpeg",
-          "source_kind": "third_party_direct",
-          "provider": "BtbN/FFmpeg-Builds",
-          "version": "n8.1.3 LGPL build",
-          "release_tag": "autobuild-2026-09-23-14-55",
-          "url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-09-23-14-55/ffmpeg-n8.1.3-win64-lgpl-8.1.zip",
-          "sha256": "3aacb540e6c0aaef82a063fc6ddb5b55aa4425e5d95780c0c04b5a528667020a",
+          "name": "mediainfo",
+          "source_kind": "direct",
+          "provider": "MediaArea",
+          "version": "26.05",
+          "url": "https://mediaarea.net/download/binary/mediainfo/26.05/MediaInfo_CLI_26.05_Windows_x64.zip",
+          "sha256": "f7f80620ce6d14f4995f0de6f98e3ef18ad29496db01899571152ee3311229f9",
           "extractor": "zip",
           "extract": [
-            {"match": "*/bin/ffmpeg.exe", "destination": "bin/ffmpeg.exe"},
-            {"match": "*/bin/ffprobe.exe", "destination": "bin/ffprobe.exe"}
-          ],
-          "license_url": "https://ffmpeg.org/legal.html"
+            {"match": "MediaInfo.exe", "destination": "bin/MediaInfo.exe"},
+            {"match": "LICENSE", "destination": "licenses/mediainfo/LICENSE"}
+          ]
         },
         {
           "name": "pdftoppm",

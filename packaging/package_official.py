@@ -209,8 +209,9 @@ def member_matches(name: str, pattern: str) -> bool:
 
 def write_member(destination_root: Path, destination: str, data: bytes, written: set[str]) -> str:
     safe_destination = safe_member_name(destination)
-    if safe_destination in written:
-        raise PackageError(f"duplicate staged destination: {safe_destination}")
+    previous = next((path for path in written if path.casefold() == safe_destination.casefold()), None)
+    if previous is not None:
+        raise PackageError(f"duplicate staged destination: {previous!r} and {safe_destination!r}")
     target = destination_root / safe_destination
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_bytes(data)
@@ -613,7 +614,9 @@ def write_package_config(
         if "chafa" in helpers:
             command = 'chafa.exe --format=symbols --animate=off %s1 | more' if windows else 'chafa --format=symbols --animate=off %s1 | less -R'
             lines.append(f'img-chafa = [{{ run = "{command}", block = true, for = "{family}", desc = "Render with Chafa" }}]')
-        if "ffmpeg" in helpers:
+        if "mediainfo" in helpers:
+            lines.append('media-metadata = [{ run = "MediaInfo.exe %s1 | more", block = true, for = "windows", desc = "Show media metadata with MediaInfo" }]')
+        elif "ffmpeg" in helpers:
             command = 'ffprobe.exe -hide_banner %s1 | more' if windows else 'ffprobe -hide_banner %s1 2>&1 | less -R'
             lines.append(f'media-metadata = [{{ run = "{command}", block = true, for = "{family}", desc = "Show media metadata with FFprobe" }}]')
         markdown = ["edit", *openers, "md-vscode", "md-chrome", "reveal"]
@@ -621,10 +624,10 @@ def write_package_config(
             "", "[[open.prepend_rules]]", 'url = "*.{md,markdown,mdown,mkdn}"',
             f'use = [ {", ".join(json.dumps(x) for x in markdown)} ]',
         ])
-        image = ["open"] + (["img-chafa"] if "chafa" in helpers else []) + (["media-metadata"] if "ffmpeg" in helpers else []) + ["reveal"]
+        image = ["open"] + (["img-chafa"] if "chafa" in helpers else []) + (["media-metadata"] if {"ffmpeg", "mediainfo"} & helpers else []) + ["reveal"]
         lines.extend(["", "[[open.prepend_rules]]", 'mime = "image/*"', f'use = [ {", ".join(json.dumps(x) for x in image)} ]'])
         lines.extend(["", "[[open.prepend_rules]]", 'mime = "application/pdf"', 'use = [ "open", "reveal" ]'])
-        media = ["open"] + (["media-metadata"] if "ffmpeg" in helpers else []) + ["reveal"]
+        media = ["open"] + (["media-metadata"] if {"ffmpeg", "mediainfo"} & helpers else []) + ["reveal"]
         lines.extend(["", "[[open.prepend_rules]]", 'mime = "{audio,video}/*"', f'use = [ {", ".join(json.dumps(x) for x in media)} ]'])
     if "piper" in plugins:
         lines.extend(["", "# tar is package-local on Windows; Ubuntu supplies tar on Linux.", "[[plugin.prepend_previewers]]", 'url = "*.{tgz,tar.gz}"', 'run = \'piper -- tar -tzf "$1"\''])
@@ -932,6 +935,17 @@ def package_readme(manifest: dict[str, Any]) -> str:
         if entry.get("status") in {"pending", "unavailable"}
     ]
     flat = manifest.get("layout") == "flat-bin"
+    included_media = {name for name, entry in manifest["helpers"].items() if entry.get("status") == "included"}
+    if "mediainfo" in included_media:
+        media_commands = ["MediaInfo.exe --Version  # media metadata helper"]
+    elif "ffmpeg" in included_media:
+        media_commands = ["ffmpeg -version    # video helper", "ffprobe -version   # video metadata helper"]
+    else:
+        media_commands = []
+    if manifest["platform"] == "windows-x86_64":
+        media_boundary = "On Windows, video thumbnails are unavailable without a host FFmpeg; MediaInfo provides local-file metadata only. Its optional network-URL LIBCURL.DLL is not bundled." if "mediainfo" in included_media else "On Windows, video thumbnails need a host FFmpeg; this profile has no bundled media metadata helper."
+    else:
+        media_boundary = "Native video/PDF image previews still depend on terminal graphics support."
     if flat:
         run_lines = [
             "Linux:",
@@ -1037,8 +1051,7 @@ def package_readme(manifest: dict[str, Any]) -> str:
         "",
         "```text",
         "7zz i              # archive helper",
-        "ffmpeg -version    # video helper",
-        "ffprobe -version   # video metadata helper",
+        *media_commands,
         "jq --version       # JSON helper",
         "pdftoppm -h        # Poppler PDF helper, if included",
         "resvg --version    # SVG helper, if included",
@@ -1049,7 +1062,8 @@ def package_readme(manifest: dict[str, Any]) -> str:
         "",
         "## Boundary",
         "",
-        "Chafa image preview is text and works without a terminal image protocol. Native video/PDF image previews still depend on terminal graphics support.",
+        "Chafa image preview is text and works without a terminal image protocol.",
+        media_boundary,
         "This package does not install Zellij, SSH, Windows Terminal, Git or system packages.",
         "Pending/unavailable helpers are capability limitations, not hidden runtime downloads.",
         "",

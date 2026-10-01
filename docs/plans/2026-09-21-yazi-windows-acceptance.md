@@ -2,7 +2,7 @@
 
 ## 目的
 
-在另一台實際 Windows x86_64 主機驗證 `yazi-v26.9.1-x86_64-pc-windows-msvc-full.zip`，
+在另一台實際 Windows x86_64 主機驗證 `yazi-v26.9.1-x86_64-pc-windows-msvc-flat-bin.zip`，
 確認 package 不依賴 Git、Scoop、apt、Rust、Cargo 或 runtime internet，並分開記錄：
 
 1. archive/checksum 是否正確。
@@ -33,8 +33,8 @@ Windows runtime acceptance。
 2. 不把 ZIP commit 到 Git repository；由 GitHub Release asset 或公司內網檔案區取得。
 3. 解壓到 user-owned temporary directory；不要安裝到 `Program Files`，不要修改 system PATH，
    不要刪除既有 `yazi.exe` 或既有 Zellij 設定。
-4. 使用 package `bin\yazi.cmd`，讓 package-local `file.exe`、`magic.mgc`、helper DLL 與
-   ImageMagick directory 優先於 host PATH。
+4. 使用 package `yazi_bin\yazi.cmd`，讓 package-local `file.exe`、`magic.mgc`、helper DLL 與
+   ImageMagick data 優先於 host PATH。
 
 ## 測試階段
 
@@ -44,7 +44,7 @@ Windows runtime acceptance。
 
 ```powershell
 .\packaging\acceptance\windows-x86_64.ps1 `
-  -Archive .\dist\official\yazi-v26.9.1-x86_64-pc-windows-msvc-full.zip
+  -Archive .\dist\plugin-full\yazi-v26.9.1-x86_64-pc-windows-msvc-flat-bin.zip
 ```
 
 驗證 ZIP checksum、manifest target、`SHA256SUMS`、launcher、`file.exe`、magic database、
@@ -55,35 +55,34 @@ Windows runtime acceptance。
 
 ### W1：helper executable smoke
 
-在解壓目錄以 package-local PATH 執行：
+在解壓後的 `yazi_bin` 目錄以 package-local PATH 執行：
 
 ```powershell
-$env:Path = "$PWD\bin;$PWD\runtime\bin;$PWD\runtime\imagemagick;$env:Path"
-& .\bin\yazi.real.exe --version
-& .\bin\ya.real.exe --version
-& .\bin\glow.exe --version
-& .\bin\bat.exe --version
-& .\bin\7zz.exe i
-& .\bin\ffmpeg.exe -version
-& .\bin\ffprobe.exe -version
-& .\bin\jq.exe --version
-& .\bin\pdftoppm.exe -h
-& .\bin\chafa.exe --version
-& .\bin\rg.exe --version
-& .\bin\fd.exe --version
-& .\bin\fzf.exe --version
-& .\bin\zoxide.exe --version
-& .\runtime\bin\file.exe --version
-& .\runtime\imagemagick\magick.exe -version
+$env:Path = "$PWD;$env:Path"
+& .\yazi.real.exe --version
+& .\ya.real.exe --version
+& .\glow.exe --version
+& .\bat.exe --version
+& .\7zz.exe i
+& .\MediaInfo.exe --Version
+& .\jq.exe --version
+& .\pdftoppm.exe -h
+& .\chafa.exe --version
+& .\rg.exe --version
+& .\fd.exe --version
+& .\fzf.exe --version
+& .\zoxide.exe --version
+& .\file.exe --version
+& .\magick.exe -version
 ```
 
 使用 launcher 另確認 package config 預設值與 override 行為：
 
 ```powershell
 Remove-Item Env:YAZI_CONFIG_HOME -ErrorAction SilentlyContinue
-& .\bin\ya.cmd env
+& .\ya.cmd env
 $env:YAZI_CONFIG_HOME = "$env:TEMP\yazi-test-config"
-& .\bin\ya.cmd env
+& .\ya.cmd env
 ```
 
 第一個命令應使用解壓目錄內的 `config`；第二個命令應保留測試者指定的 config path。
@@ -96,7 +95,7 @@ $env:YAZI_CONFIG_HOME = "$env:TEMP\yazi-test-config"
 
 在 Windows Terminal、未進入 Zellij 時：
 
-1. 執行 `.\bin\yazi.cmd .`。
+1. 執行 `.\yazi.cmd .`。
 2. 確認 Unicode filename、mouse、resize、selection、shell/open action。
 3. 執行 `ya env`，保存 terminal、adapter、SSH mode 與 image driver 輸出。
 4. 在 Markdown 上開啟 `Open with`，確認 `bat`、`glow` 選項存在且命令能執行，`Enter`
@@ -106,7 +105,7 @@ $env:YAZI_CONFIG_HOME = "$env:TEMP\yazi-test-config"
 
 ### W3：native Zellij integration
 
-在 Windows Terminal 中執行 native Zellij，再於 pane 內執行 `.\bin\yazi.cmd .`：
+在 Windows Terminal 中執行 native Zellij，再於 pane 內執行 `.\yazi.cmd .`：
 
 1. 記錄 Zellij version、Windows Terminal version、ConPTY 狀態。
 2. 測試 pane resize、mouse、Unicode、detach/attach、scrollback。
@@ -119,7 +118,7 @@ $env:YAZI_CONFIG_HOME = "$env:TEMP\yazi-test-config"
 | --- | --- | --- |
 | PNG/JPEG | `chafa.exe` / Yazi image adapter | Sixel/Chafa、尺寸、可見性 |
 | SVG | Yazi `resvg` path；Windows 本版可能 unavailable | fallback、錯誤訊息 |
-| MP4/WebM | `ffmpeg.exe` + `ffprobe.exe` | thumbnail、metadata、stderr |
+| MP4/WebM | `MediaInfo.exe` + Windows system default opener | `O` metadata、外部開啟；無 host FFmpeg 時沒有右側影片縮圖 |
 | PDF | `pdftoppm.exe` / Poppler | page image、字型、錯誤訊息 |
 | ZIP/7z/tar | `7zz.exe` | list、preview、extract |
 | HEIC/JXL/font | `magick.exe` | format conversion/preview；記錄實際 codec |
@@ -131,7 +130,7 @@ command、exit code、畫面 screenshot（若是 graphics case）、stdout/stder
 結果 `PASS` / `FAIL` / `NOT-APPLICABLE` / `BLOCKED` 與原因。結果回寫：
 
 - `packaging/catalog.json` 的 `helper_matrix.*.windows.runtime_test` 只在實機證據完成後更新。
-- `dist/official/*.manifest.json` 重新由 packager 產生，不手動修改產物 manifest。
+- `dist/plugin-full/*.manifest.json` 重新由 packager 產生，不手動修改產物 manifest。
 - `packaging/acceptance/windows-x86_64.md` 增加版本與結果摘要。
 
 ## Pass criteria

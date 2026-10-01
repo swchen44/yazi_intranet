@@ -431,44 +431,40 @@
         "zoxide.exe"
       ]
     },
-    "ffmpeg": {
+    "mediainfo": {
       "optional": true,
-      "role": "video-preview",
-      "capability": "Create video thumbnails and inspect video metadata; ffprobe is delivered from the same build.",
-      "overlap": "Not replaced by ImageMagick; ImageMagick handles images/fonts, while FFmpeg handles video containers/codecs.",
+      "role": "media-metadata",
+      "capability": "Show image, audio and video metadata from the Open with menu; does not create video thumbnails.",
+      "overlap": "Replaces the bundled FFprobe metadata menu on Windows, not FFmpeg video thumbnails.",
       "dependencies": {
         "linux": [
-          "package-local ffmpeg and ffprobe",
-          "terminal graphics protocol for visible thumbnails"
+          "not bundled; Linux retains FFprobe"
         ],
         "windows": [
-          "package-local ffmpeg.exe and ffprobe.exe",
-          "terminal graphics protocol for visible thumbnails"
+          "package-local MediaInfo.exe for local files; optional network URL libcurl is not bundled from MediaInfo"
         ]
       },
       "linux": {
-        "bundle_status": "included",
-        "runtime_test": "passed",
-        "test_command": "ffmpeg -version; ffprobe -version"
+        "bundle_status": "not-bundled",
+        "runtime_test": "not-applicable",
+        "test_command": ""
       },
       "windows": {
         "bundle_status": "included",
         "runtime_test": "pending",
-        "test_command": "ffmpeg.exe -version; ffprobe.exe -version"
+        "test_command": "MediaInfo.exe --Version; MediaInfo.exe fixture.mp4"
       },
-      "name": "ffmpeg",
-      "version": "n8.1.3 LGPL build",
-      "provider": "BtbN/FFmpeg-Builds",
-      "source_kind": "third_party_direct",
-      "url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-09-23-14-55/ffmpeg-n8.1.3-win64-lgpl-8.1.zip",
-      "license_url": "https://ffmpeg.org/legal.html",
+      "name": "mediainfo",
+      "version": "26.05",
+      "provider": "MediaArea",
+      "source_kind": "direct",
+      "url": "https://mediaarea.net/download/binary/mediainfo/26.05/MediaInfo_CLI_26.05_Windows_x64.zip",
       "status": "included",
-      "sha256": "3aacb540e6c0aaef82a063fc6ddb5b55aa4425e5d95780c0c04b5a528667020a",
+      "sha256": "f7f80620ce6d14f4995f0de6f98e3ef18ad29496db01899571152ee3311229f9",
       "files": [
-        "ffmpeg.exe",
-        "ffprobe.exe"
-      ],
-      "license_file": "licenses/ffmpeg-SOURCE-URL.txt"
+        "MediaInfo.exe",
+        "licenses/mediainfo/LICENSE"
+      ]
     },
     "pdftoppm": {
       "optional": true,
@@ -1326,5 +1322,5 @@
     "Chafa text preview works without an image protocol when piper and a shell are available."
   ],
   "layout": "flat-bin",
-  "package_sha256": "082255518c70d2cf64e0040c235d5b7c5be6afca8e3e66a3fb5d81191795ea4f"
+  "package_sha256": "bf31d3cd5c12c399380e4e2c77dbfab0977b4126d26a9d092c8de33a60a30fcd"
 }

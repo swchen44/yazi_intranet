@@ -49,9 +49,8 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual(windows["yazi"]["asset"], "yazi-x86_64-pc-windows-msvc.zip")
 
     def test_requested_helper_matrix_is_present_or_explicitly_unavailable(self) -> None:
-        expected = {
+        shared = {
             "7zz",
-            "ffmpeg",
             "jq",
             "pdftoppm",
             "resvg",
@@ -74,7 +73,8 @@ class CatalogTests(unittest.TestCase):
                 for helper in packager.target_config(catalog, target_name)["helpers"]
             }
             platform_specific = {"tree"} if target_name == "windows-x86_64" else set()
-            self.assertEqual(set(helpers), expected | {"file"} | platform_specific)
+            media = {"mediainfo"} if target_name == "windows-x86_64" else {"ffmpeg"}
+            self.assertEqual(set(helpers), shared | {"file"} | platform_specific | media)
             for helper in helpers.values():
                 profile = matrix[helper["name"]]
                 self.assertIn("capability", profile)
@@ -105,8 +105,28 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual(helpers["tree"]["extractor"], "tar.zst")
         self.assertEqual(helpers["tree"]["extract"][0]["destination"], "bin/tree.exe")
 
+    def test_windows_media_helper_is_mediainfo_without_ffmpeg(self) -> None:
+        catalog = packager.load_catalog(PACKAGING / "catalog.json")
+        windows = {item["name"]: item for item in packager.target_config(catalog, "windows-x86_64")["helpers"]}
+        linux = {item["name"]: item for item in packager.target_config(catalog, "linux-x86_64")["helpers"]}
+        self.assertIn("ffmpeg", linux)
+        self.assertNotIn("ffmpeg", windows)
+        self.assertEqual(windows["mediainfo"]["extractor"], "zip")
+        self.assertEqual(
+            {rule["destination"] for rule in windows["mediainfo"]["extract"]},
+            {"bin/MediaInfo.exe", "licenses/mediainfo/LICENSE"},
+        )
+
 
 class StagingTests(unittest.TestCase):
+    def test_staging_rejects_case_insensitive_filename_collision(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            stage = Path(temp)
+            written: set[str] = set()
+            packager.write_member(stage, "bin/libcurl.dll", b"poppler", written)
+            with self.assertRaises(packager.PackageError):
+                packager.write_member(stage, "bin/LIBCURL.DLL", b"mediainfo", written)
+
     @unittest.skipUnless(shutil.which("7zz") and shutil.which("zstd"), "7zz and zstd required")
     def test_zstd_pacman_archive_extracts_only_tree(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
@@ -163,6 +183,53 @@ class StagingTests(unittest.TestCase):
             config = (stage / "config/yazi.toml").read_text()
             self.assertNotIn("rich-preview", config)
             self.assertNotIn('run = "duckdb"', config)
+
+    def test_windows_media_menu_uses_mediainfo_and_linux_keeps_ffprobe(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            windows_stage = Path(temp) / "windows"
+            packager.write_package_config(
+                windows_stage, windows=True, helpers={"mediainfo", "chafa"}, plugins={"piper"}
+            )
+            windows_config = (windows_stage / "config/yazi.toml").read_text()
+            self.assertIn("MediaInfo.exe", windows_config)
+            self.assertIn("Show media metadata with MediaInfo", windows_config)
+            self.assertNotIn("ffprobe", windows_config)
+            self.assertIn('mime = "{audio,video}/*"', windows_config)
+
+            linux_stage = Path(temp) / "linux"
+            packager.write_package_config(linux_stage, windows=False, helpers={"ffmpeg"}, plugins={"piper"})
+            linux_config = (linux_stage / "config/yazi.toml").read_text()
+            self.assertIn("ffprobe -hide_banner", linux_config)
+
+    def test_windows_package_readme_documents_mediainfo_without_ffmpeg(self) -> None:
+        manifest = {
+            "platform": "windows-x86_64",
+            "target": "x86_64-pc-windows-msvc",
+            "package_version": "v26.9.1",
+            "profile": "full",
+            "layout": "flat-bin",
+            "yazi": {"repo": "sxyazi/yazi", "tag": "v26.9.1"},
+            "helpers": {"mediainfo": {"status": "included"}},
+        }
+        readme = packager.package_readme(manifest)
+        self.assertIn("MediaInfo.exe", readme)
+        self.assertIn("video thumbnails are unavailable", readme)
+        self.assertNotIn("ffmpeg -version", readme)
+        self.assertNotIn("ffprobe -version", readme)
+
+    def test_minimal_windows_readme_omits_media_helper_commands(self) -> None:
+        manifest = {
+            "platform": "windows-x86_64",
+            "target": "x86_64-pc-windows-msvc",
+            "package_version": "v26.9.1",
+            "profile": "minimal",
+            "layout": "flat-bin",
+            "yazi": {"repo": "sxyazi/yazi", "tag": "v26.9.1"},
+            "helpers": {"mediainfo": {"status": "omitted-by-profile"}},
+        }
+        readme = packager.package_readme(manifest)
+        self.assertNotIn("MediaInfo.exe --Version", readme)
+        self.assertNotIn("ffmpeg -version", readme)
 
     def test_flat_destination_maps_runtime_paths_and_rejects_collisions(self) -> None:
         self.assertEqual(packager.flat_destination("bin/yazi.real"), "yazi.real")

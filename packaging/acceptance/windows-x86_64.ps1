@@ -75,6 +75,11 @@ try {
             throw "missing package file: $relative"
         }
     }
+    foreach ($name in @("ffmpeg.exe", "ffprobe.exe")) {
+        if (Test-Path -LiteralPath (Join-Path $commandRoot $name)) {
+            throw "Windows package unexpectedly contains $name"
+        }
+    }
     if ($flat) {
         if (Test-Path -LiteralPath (Join-Path $packageRoot.FullName "bin")) {
             throw "flat package must not contain bin directory"
@@ -94,6 +99,9 @@ try {
     }
     if ($configText -notmatch "md-bat" -or $configText -notmatch "md-glow") {
         throw "package config Markdown openers are missing"
+    }
+    if ($configText -notmatch "MediaInfo.exe" -or $configText -match "ffprobe") {
+        throw "package config media metadata opener is incorrect"
     }
     if ($manifest.plugins.PSObject.Properties.Count -gt 0) {
         foreach ($relative in @("config\keymap.toml", "config\init.lua", "config\package.toml")) {
@@ -126,8 +134,7 @@ try {
         @{ Path = (Join-Path $commandRoot "glow.exe"); Arguments = @("--version") },
         @{ Path = (Join-Path $commandRoot "bat.exe"); Arguments = @("--version") },
         @{ Path = (Join-Path $commandRoot "7zz.exe"); Arguments = @("i") },
-        @{ Path = (Join-Path $commandRoot "ffmpeg.exe"); Arguments = @("-version") },
-        @{ Path = (Join-Path $commandRoot "ffprobe.exe"); Arguments = @("-version") },
+        @{ Path = (Join-Path $commandRoot "MediaInfo.exe"); Arguments = @("--Version") },
         @{ Path = (Join-Path $commandRoot "jq.exe"); Arguments = @("--version") },
         @{ Path = (Join-Path $commandRoot "pdftoppm.exe"); Arguments = @("-h") },
         @{ Path = (Join-Path $commandRoot "chafa.exe"); Arguments = @("--version") },
@@ -146,7 +153,7 @@ try {
         $path = $command.Path
         if (Test-Path -LiteralPath $path) {
             & $path @($command.Arguments)
-            if ($path -match '(duckdb|lazygit|sh|tar)\.exe$' -and $LASTEXITCODE -ne 0) {
+            if ($path -match '(duckdb|lazygit|sh|tar|MediaInfo)\.exe$' -and $LASTEXITCODE -ne 0) {
                 throw "helper command failed ($LASTEXITCODE): $path"
             }
         }
