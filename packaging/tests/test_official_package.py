@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import tarfile
 import tempfile
+import tomllib
 import unittest
 import zipfile
 from pathlib import Path
@@ -310,6 +311,9 @@ class StagingTests(unittest.TestCase):
             self.assertIn("[opener]", config)
             self.assertIn("md-bat", config)
             self.assertIn("md-glow", config)
+            linux_glow = tomllib.loads(config)["opener"]["md-glow"][0]
+            self.assertEqual(linux_glow["run"], "glow --tui %s1")
+            self.assertTrue(linux_glow["block"])
             self.assertIn("[[open.prepend_rules]]", config)
             self.assertIn('use = [ "edit", "md-bat", "md-glow", "md-vscode", "md-chrome", "reveal" ]', config)
 
@@ -317,7 +321,9 @@ class StagingTests(unittest.TestCase):
             packager.write_package_config(windows_stage, windows=True, helpers={"bat", "glow"})
             windows_config = (windows_stage / "config" / "yazi.toml").read_text(encoding="utf-8")
             self.assertIn('bat.exe --paging=never', windows_config)
-            self.assertIn('glow.exe %s', windows_config)
+            windows_glow = tomllib.loads(windows_config)["opener"]["md-glow"][0]
+            self.assertEqual(windows_glow["run"], "glow.exe --tui %s1")
+            self.assertTrue(windows_glow["block"])
             self.assertIn('for = "windows"', windows_config)
 
     def test_package_config_omits_unavailable_optional_openers(self) -> None:

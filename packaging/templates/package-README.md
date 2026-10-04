@@ -70,6 +70,9 @@ Linux launcher 會設定 package-local `PATH`、`YAZI_FILE_ONE`、`MAGIC` 與
 第一個 `edit` opener 仍是一般預設行為。這份 config 不強制使用者的 editor、shell、
 theme、keymap、credentials 或公司路徑。
 
+在 `O` 選單選 `Render with Glow` 會開啟 Glow 內建的互動式閱讀畫面；按 `q`
+返回 Yazi，不依賴 `PAGER` 或另外安裝分頁器。
+
 ## Scope
 
 這是 Yazi package，Zellij、SSH client 與 Windows Terminal 由各自的安裝包或主機提供。Linux 上可以先啟動 Zellij，再在 pane 內執行這個 package 的 `./bin/yazi`。

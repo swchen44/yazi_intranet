@@ -7,6 +7,8 @@
 /dist/official/*.zip
 /dist/plugin-full/*.tar.gz
 /dist/plugin-full/*.zip
+/dist/plugin-full/glow-tui/*.tar.gz
+/dist/plugin-full/glow-tui/*.zip
 
 # Local build/test output.
 __pycache__/

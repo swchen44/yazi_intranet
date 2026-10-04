@@ -1,8 +1,10 @@
 # Yazi intranet bundle
 
 單一 `full` plugin 包產生於 `dist/plugin-full/`，Linux/Windows 都採 `yazi_bin/`
-flat layout。Linux 測試版在 [Linux prerelease](https://github.com/swchen44/yazi_intranet/releases/tag/yazi-v26.9.1-intranet-2026-10-01)；
-Windows MediaInfo 版在 [Windows prerelease](https://github.com/swchen44/yazi_intranet/releases/tag/yazi-v26.9.1-intranet-2026-10-01-windows-mediainfo)。
+flat layout。最新 Glow TUI 測試版同時包含 Linux、Windows：
+[2026-10-05 Glow TUI prerelease](https://github.com/swchen44/yazi_intranet/releases/tag/yazi-v26.9.1-intranet-2026-10-05-glow-tui)。
+先前的 [Linux prerelease](https://github.com/swchen44/yazi_intranet/releases/tag/yazi-v26.9.1-intranet-2026-10-01) 與
+[Windows MediaInfo prerelease](https://github.com/swchen44/yazi_intranet/releases/tag/yazi-v26.9.1-intranet-2026-10-01-windows-mediainfo) 保留供比對。
 原 `dist/official/` 舊包保留供比對；新的 Windows 互動驗收仍需在另一台 Windows 主機完成。
 
 ## Why
@@ -213,7 +215,7 @@ Z             使用 zoxide 尋找歷史目錄
 | --- | --- |
 | `edit` | 使用既有 editor 開啟 |
 | `bat` | 顯示 syntax highlighting 的 Markdown/text |
-| `glow` | 在 terminal render Markdown |
+| `glow` | 開啟互動式 Markdown 閱讀畫面；按 `q` 返回 Yazi，不受 `PAGER` 設定影響 |
 | `VS Code` / `Google Chrome` | 有安裝對應應用程式且可從目前環境啟動時才可使用 |
 
 `Enter` 仍使用第一個 `edit` opener，不會因為 bundle 有 `bat` 或 `glow` 就改變預設行為。

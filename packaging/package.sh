@@ -133,7 +133,7 @@ EOF
 			md-glow)
 				cat >> "$STAGE/config/yazi.toml" <<'EOF'
 md-glow = [
-  { run = "glow %s", block = true, for = "unix", desc = "Render Markdown with glow" },
+  { run = "glow --tui %s1", block = true, for = "unix", desc = "Render Markdown with glow" },
 ]
 EOF
 				;;

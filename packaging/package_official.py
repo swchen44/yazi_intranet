@@ -608,7 +608,7 @@ def write_package_config(
         if "md-glow" in openers:
             lines.extend([
                 "md-glow = [",
-                f'  {{ run = "glow{command_suffix} %s", block = true, for = "{family}", desc = "Render with Glow" }},',
+                f'  {{ run = "glow{command_suffix} --tui %s1", block = true, for = "{family}", desc = "Render with Glow" }},',
                 "]",
             ])
         if "chafa" in helpers:
@@ -1044,6 +1044,7 @@ def package_readme(manifest: dict[str, Any]) -> str:
         "The package launcher sets `YAZI_CONFIG_HOME` to the package config directory by default.",
         "If `YAZI_CONFIG_HOME` is already set, the launcher preserves it so a user can select another config directory.",
         "In the full profile, Chafa renders image previews as terminal text, DuckDB renders CSV/TSV/Parquet, and `tar` lists `.tgz`/`.tar.gz` content. Markdown uses Glow in the right preview and exposes Bat/Glow in Open with.",
+        "When Glow is included, `O` > Render with Glow opens its built-in TUI until you press `q`; it does not depend on `PAGER` or an external pager.",
         "The `.ipynb` rich-preview plugin falls back to Yazi's code preview when `rich` is absent. Install `rich-cli` later only if formatted notebook preview is desired.",
         "`O` opens the native Open with menu; `o` prompts for a command. VS Code, Chrome and desktop openers need those host applications and a GUI session. Git plugins need host Git.",
         "",
